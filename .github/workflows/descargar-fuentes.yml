@@ -1,0 +1,24 @@
+name: Descarga Unica de Fuentes
+on: workflow_dispatch # Esto permite que TÚ le des al botón de "Play" para ejecutarlo
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Permiso para que GitHub guarde los archivos descargados
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar script
+        run: |
+          chmod +x download-fonts.sh
+          ./download-fonts.sh
+
+      - name: Guardar fuentes en el repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          git add .
+          git commit -m "Fuentes descargadas mediante script" || echo "Sin cambios"
+          git push
