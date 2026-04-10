@@ -1,14 +1,14 @@
 // /api/render-slide.ts
-// Vibemarket Render Engine v2.0 - API Endpoint
-// POST /api/render-slide → receives slide data → returns PNG base64
+// Vibemarket Render Engine v2.1 - API Endpoint
+// POST /api/render-slide → returns PNG base64 + Fabric.js JSON for editor
 
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { RenderSlideRequest, RenderSlideResponse } from '../lib/types.js';
 import { composeSlide, autoSelectDesign } from '../lib/composer.js';
 import { loadFonts } from '../lib/fonts.js';
+import { convertSlideToFabric } from '../lib/fabric-converter.js';
 
-// Use VercelRequest/VercelResponse types inline to avoid import issues
 export default async function handler(req: any, res: any) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,7 +31,7 @@ export default async function handler(req: any, res: any) {
         success: false,
         error: 'Missing required fields',
         details: 'Required: title, brand (with name, color_primary, color_secondary)',
-      } as RenderSlideResponse);
+      });
     }
 
     // ── Defaults ──────────────────────────────────────────────
@@ -41,7 +41,6 @@ export default async function handler(req: any, res: any) {
     const width = body.output?.width || 1080;
     const height = body.output?.height || 1350;
 
-    // Auto-select design if not specified
     let mood = body.mood;
     let layout = body.layout;
     let decoration = body.decoration;
@@ -53,7 +52,6 @@ export default async function handler(req: any, res: any) {
       decoration = decoration || auto.decoration;
     }
 
-    // Ensure brand has required fields
     const brand = {
       name: body.brand.name || 'Brand',
       color_primary: body.brand.color_primary || '#333333',
@@ -87,28 +85,41 @@ export default async function handler(req: any, res: any) {
     // ── Load fonts ────────────────────────────────────────────
     const fonts = await loadFonts(brand.font_heading, brand.font_body);
 
-    // ── Render with Satori ────────────────────────────────────
+    // ── Render with Satori → SVG ──────────────────────────────
     const svg = await satori(slideNode as any, {
       width,
       height,
       fonts,
     });
 
-    // ── Convert to PNG with Resvg ─────────────────────────────
+    // ── Convert SVG → PNG ─────────────────────────────────────
     const resvg = new Resvg(svg, {
       fitTo: { mode: 'width', value: width },
     });
     const pngData = resvg.render();
     const pngBuffer = pngData.asPng();
 
+    // ── Convert SVG → Fabric.js JSON for editor ───────────────
+    const fabricData = convertSlideToFabric(svg, {
+      slide_number: slideNumber,
+      slide_type: slideType,
+      mood,
+      width,
+      height,
+      primary: brand.color_primary,
+      secondary: brand.color_secondary,
+    });
+
     const renderTime = Date.now() - startTime;
 
     return res.status(200).json({
       success: true,
       image_base64: pngBuffer.toString('base64'),
+      design_elements: fabricData,
+      design_intent: { mood, layout, decoration },
       dimensions: { width, height },
       render_time_ms: renderTime,
-    } as RenderSlideResponse);
+    });
 
   } catch (error) {
     console.error('Render error:', error);
@@ -116,6 +127,6 @@ export default async function handler(req: any, res: any) {
       success: false,
       error: 'Render failed',
       details: error instanceof Error ? error.message : 'Unknown error',
-    } as RenderSlideResponse);
+    });
   }
 }
