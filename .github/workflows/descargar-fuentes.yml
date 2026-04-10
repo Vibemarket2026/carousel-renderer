@@ -29,7 +29,7 @@ jobs:
           git commit -m "Fuentes descargadas mediante script" || echo "Sin cambios"
           
           # 3. Bajamos lo nuevo de GitHub y lo fusionamos limpiamente
-          git pull --rebase
+          git pull --rebase --autostash -X theirs origin main
           
           # 4. Subimos el resultado final asegurando la rama
           git push origin main
