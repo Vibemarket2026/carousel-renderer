@@ -11,37 +11,56 @@ mkdir -p "$FONTS_DIR"
 
 declare -A FONTS=(
   # Already included: Inter
-# ═══ SANS-SERIF MODERNAS (Imprescindibles para UI y cuerpos legibles) ═══
-  ["Inter-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Regular.ttf"
-  ["Inter-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Bold.ttf"
-  ["FiraSans-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/FiraSans-Regular.ttf"
-  ["FiraSans-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/FiraSans-Bold.ttf"
+# ═══ SANS-SERIF CORE (Las que ya tenías) ═══
+  ["Roboto-Regular"]="https://fonts.gstatic.com/s/roboto/v30/KFOMCnqEu92Fr1Mu4mxK.ttf"
+  ["Roboto-Bold"]="https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4.ttf"
+  ["Montserrat-Regular"]="https://fonts.gstatic.com/s/montserrat/v26/JTUSjIg1_i6t8kCHKm459Wlhzg.ttf"
+  ["Montserrat-Bold"]="https://fonts.gstatic.com/s/montserrat/v26/JTURjIg1_i6t8kCHKm45_dJE3gnD_g.ttf"
+  ["Poppins-Regular"]="https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrJJfecg.ttf"
+  ["Poppins-Bold"]="https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLCz7Z1xlFQ.ttf"
+  ["OpenSans-Regular"]="https://fonts.gstatic.com/s/opensans/v36/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4t.ttf"
+  ["OpenSans-Bold"]="https://fonts.gstatic.com/s/opensans/v36/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsgH1x4t.ttf"
+  ["Lato-Regular"]="https://fonts.gstatic.com/s/lato/v24/S6uyw4BMUTPHjx4wXg.ttf"
+  ["Lato-Bold"]="https://fonts.gstatic.com/s/lato/v24/S6u9w4BMUTPHh6UVSwiPHA.ttf"
+  ["Raleway-Regular"]="https://fonts.gstatic.com/s/raleway/v29/1Ptug8zYS_SKggPNyC0IT4ttDfA.ttf"
+  ["Raleway-Bold"]="https://fonts.gstatic.com/s/raleway/v29/1Ptrg8zYS_SKggPNwIYqWqZPBQ.ttf"
+  ["Nunito-Regular"]="https://fonts.gstatic.com/s/nunito/v26/XRXV3I6Li01BKofINeaB.ttf"
+  ["Nunito-Bold"]="https://fonts.gstatic.com/s/nunito/v26/XRXW3I6Li01BKofA6sKUYevN.ttf"
+  ["WorkSans-Regular"]="https://fonts.gstatic.com/s/worksans/v19/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXNigDp6_cOyA.ttf"
+  ["WorkSans-Bold"]="https://fonts.gstatic.com/s/worksans/v19/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K5fQNigDp6_cOyA.ttf"
+  ["DMSans-Regular"]="https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAkpFhRQ.ttf"
+  ["DMSans-Bold"]="https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwA-JZhRQ.ttf"
 
-  # ═══ ELEGANCIA Y TESTIMONIOS (Serifas modernas para citas y marcas premium) ═══
-  ["PlayfairDisplay-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf"
-  ["PlayfairDisplay-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf"
-  ["Lora-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/lora/static/Lora-Regular.ttf"
-  ["Lora-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/lora/static/Lora-Bold.ttf"
-  ["Merriweather-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/merriweather/Merriweather-Regular.ttf"
-  ["Merriweather-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/merriweather/Merriweather-Bold.ttf"
+  # ═══ SANS-SERIF MODERNAS (Adiciones) ═══
+  ["Inter-Regular"]="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZJhjp-Ek-_EeA.ttf"
+  ["Inter-Bold"]="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZJhjp-Ek-_EeA.ttf"
+  ["FiraSans-Regular"]="https://fonts.gstatic.com/s/firasans/v17/va9E4kDNxMZdWfMOD5Vvl4jO.ttf"
+  ["FiraSans-Bold"]="https://fonts.gstatic.com/s/firasans/v17/va9B4kDNxMZdWfMOD5VnPKreSxf6.ttf"
 
-  # ═══ IMPACTO Y DATOS (Condensadas, ideales para números gigantes y Portadas) ═══
-  ["Oswald-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Regular.ttf"
-  ["Oswald-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Bold.ttf"
-  ["Barlow-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/barlow/Barlow-Regular.ttf"
-  ["Barlow-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/barlow/Barlow-Bold.ttf"
+  # ═══ ELEGANCIA Y TESTIMONIOS (Serifas) ═══
+  ["PlayfairDisplay-Regular"]="https://fonts.gstatic.com/s/playfairdisplay/v30/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWbn2PKwuvg.ttf"
+  ["PlayfairDisplay-Bold"]="https://fonts.gstatic.com/s/playfairdisplay/v30/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWbn2PEOuvg.ttf"
+  ["Lora-Regular"]="https://fonts.gstatic.com/s/lora/v35/0QI6MX1D_JOuGQbT0gvTJPa787weuxBM.ttf"
+  ["Lora-Bold"]="https://fonts.gstatic.com/s/lora/v35/0QI6MX1D_JOuGQbT0gvTJPa787z5vBBM.ttf"
+  ["Merriweather-Regular"]="https://fonts.gstatic.com/s/merriweather/v30/u-440qyriQwlOrhSvowK_l5-fCZM.ttf"
+  ["Merriweather-Bold"]="https://fonts.gstatic.com/s/merriweather/v30/u-4n0qyriQwlOrhSvowK_l52xwNZWMf6.ttf"
 
-  # ═══ CERCANÍA Y BIENESTAR (Redondeadas, perfectas para pediatría o spa) ═══
-  ["Quicksand-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/quicksand/static/Quicksand-Regular.ttf"
-  ["Quicksand-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/quicksand/static/Quicksand-Bold.ttf"
-  ["Rubik-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/static/Rubik-Regular.ttf"
-  ["Rubik-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/static/Rubik-Bold.ttf"
+  # ═══ IMPACTO Y DATOS (Condensadas) ═══
+  ["Oswald-Regular"]="https://fonts.gstatic.com/s/oswald/v53/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUtiZTaR.ttf"
+  ["Oswald-Bold"]="https://fonts.gstatic.com/s/oswald/v53/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUtiZTaR.ttf" # Oswald usa weights variables, este enlace suele servir el pack.
+  ["Barlow-Regular"]="https://fonts.gstatic.com/s/barlow/v12/7cHpv4kjgoGqM7E_DMs5.ttf"
+  ["Barlow-Bold"]="https://fonts.gstatic.com/s/barlow/v12/7cHqv4kjgoGqM7E3t-4kN4Q.ttf"
 
-  # ═══ ESTILO BOUTIQUE (Geométricas con mucho carácter) ═══
-  ["JosefinSans-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/josefinsans/static/JosefinSans-Regular.ttf"
-  ["JosefinSans-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/josefinsans/static/JosefinSans-Bold.ttf"
+  # ═══ CERCANÍA Y BIENESTAR (Redondeadas) ═══
+  ["Quicksand-Regular"]="https://fonts.gstatic.com/s/quicksand/v31/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58m-xjs.ttf"
+  ["Quicksand-Bold"]="https://fonts.gstatic.com/s/quicksand/v31/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58m-xjs.ttf" # Igual que Oswald, enlace variable.
+  ["Rubik-Regular"]="https://fonts.gstatic.com/s/rubik/v28/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-WYi1WE8VAQ.ttf"
+  ["Rubik-Bold"]="https://fonts.gstatic.com/s/rubik/v28/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-WYi1WE8VAQ.ttf" # Enlace variable.
+
+  # ═══ ESTILO BOUTIQUE (Geométricas) ═══
+  ["JosefinSans-Regular"]="https://fonts.gstatic.com/s/josefinsans/v32/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_Nj_MA.ttf"
+  ["JosefinSans-Bold"]="https://fonts.gstatic.com/s/josefinsans/v32/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_Nj_MA.ttf" # Enlace variable.
 )
-
 echo "Downloading fonts to $FONTS_DIR..."
 echo ""
 
