@@ -1,6 +1,7 @@
 name: Descarga Unica de Fuentes
 on: workflow_dispatch # Esto permite que TÚ le des al botón de "Play" para ejecutarlo
-
+permissions:
+      contents: write
 jobs:
   descargar:
     runs-on: ubuntu-latest
@@ -21,5 +22,5 @@ jobs:
           git config --global user.email "github-actions[bot]@://github.com"
           git add .
           git commit -m "Fuentes descargadas mediante script" || echo "Sin cambios"
-          git pull --rebase origin main
+          git pull --rebase --autostash -X theirs origin main
           git push
