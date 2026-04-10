@@ -45,7 +45,7 @@ function layoutCentered(input: LayoutInput): SatoriNode {
   if (input.use_asset_as === 'background' && input.asset_image_data) {
     children.push(
       { type: 'img', props: { src: input.asset_image_data, style: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } } },
-      { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 2 }, children: [] } }
+      { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 2, display: 'flex' } } }
     );
   }
 
@@ -132,7 +132,7 @@ function layoutCentered(input: LayoutInput): SatoriNode {
         marginTop: `${s(24, w)}px`,
         borderRadius: '2px',
       },
-      children: [],
+      display: 'flex',
     },
   });
 
@@ -257,7 +257,7 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     type: 'div',
     props: {
       style: { width: `${s(60, w)}px`, height: '3px', backgroundColor: p.accent, marginTop: `${s(20, w)}px`, borderRadius: '2px' },
-      children: [],
+      display: 'flex',
     },
   });
 
@@ -378,7 +378,7 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     type: 'div',
     props: {
       style: { width: `${s(50, w)}px`, height: '3px', backgroundColor: p.accent, marginTop: `${s(24, w)}px`, borderRadius: '2px' },
-      children: [],
+      display: 'flex',
     },
   });
 

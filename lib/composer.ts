@@ -132,7 +132,13 @@ export function composeSlide(request: RenderSlideRequest, assetImageData?: strin
   return {
     type: 'div',
     props: {
-      style: containerStyle,
+      style: {
+        ...containerStyle,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        overflow: 'hidden',
+      },
       children: allChildren,
     },
   };
