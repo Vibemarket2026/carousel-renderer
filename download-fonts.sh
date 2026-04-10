@@ -11,24 +11,35 @@ mkdir -p "$FONTS_DIR"
 
 declare -A FONTS=(
   # Already included: Inter
-  ["Roboto-Regular"]="https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbGmT.ttf"
-  ["Roboto-Bold"]="https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuaabWmT.ttf"
-  ["Montserrat-Regular"]="https://fonts.gstatic.com/s/montserrat/v29/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aXo.ttf"
-  ["Montserrat-Bold"]="https://fonts.gstatic.com/s/montserrat/v29/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w5aXo.ttf"
-  ["Poppins-Regular"]="https://fonts.gstatic.com/s/poppins/v22/pxiEyp8kv8JHgFVrFJA.ttf"
-  ["Poppins-Bold"]="https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLCz7V1s.ttf"
-  ["OpenSans-Regular"]="https://fonts.gstatic.com/s/opensans/v40/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0C4nY.ttf"
-  ["OpenSans-Bold"]="https://fonts.gstatic.com/s/opensans/v40/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1C4nY.ttf"
-  ["Lato-Regular"]="https://fonts.gstatic.com/s/lato/v24/S6uyw4BMUTPHvxk.ttf"
-  ["Lato-Bold"]="https://fonts.gstatic.com/s/lato/v24/S6u9w4BMUTPHh6UVew8.ttf"
-  ["Raleway-Regular"]="https://fonts.gstatic.com/s/raleway/v34/1Ptxg8zYS_SKggPNyC0IT4ttDfA.ttf"
-  ["Raleway-Bold"]="https://fonts.gstatic.com/s/raleway/v34/1Ptxg8zYS_SKggPNyCIIT4ttDfCbLA.ttf"
-  ["Nunito-Regular"]="https://fonts.gstatic.com/s/nunito/v26/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshRTY9jo7eTWk.ttf"
-  ["Nunito-Bold"]="https://fonts.gstatic.com/s/nunito/v26/XRXI3I6Li01BKofiOc5wtlZ2di8HDOUuRTY9jo7eTWk.ttf"
-  ["WorkSans-Regular"]="https://fonts.gstatic.com/s/worksans/v19/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXNigDp6_cOyA.ttf"
-  ["WorkSans-Bold"]="https://fonts.gstatic.com/s/worksans/v19/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K5fQNigDp6_cOyA.ttf"
-  ["DMSans-Regular"]="https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAkpFhRQ.ttf"
-  ["DMSans-Bold"]="https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwA-JZhRQ.ttf"
+# ═══ SANS-SERIF MODERNAS (Imprescindibles para UI y cuerpos legibles) ═══
+  ["Inter-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Regular.ttf"
+  ["Inter-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Bold.ttf"
+  ["FiraSans-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/FiraSans-Regular.ttf"
+  ["FiraSans-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/FiraSans-Bold.ttf"
+
+  # ═══ ELEGANCIA Y TESTIMONIOS (Serifas modernas para citas y marcas premium) ═══
+  ["PlayfairDisplay-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf"
+  ["PlayfairDisplay-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf"
+  ["Lora-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/lora/static/Lora-Regular.ttf"
+  ["Lora-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/lora/static/Lora-Bold.ttf"
+  ["Merriweather-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/merriweather/Merriweather-Regular.ttf"
+  ["Merriweather-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/merriweather/Merriweather-Bold.ttf"
+
+  # ═══ IMPACTO Y DATOS (Condensadas, ideales para números gigantes y Portadas) ═══
+  ["Oswald-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Regular.ttf"
+  ["Oswald-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Bold.ttf"
+  ["Barlow-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/barlow/Barlow-Regular.ttf"
+  ["Barlow-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/barlow/Barlow-Bold.ttf"
+
+  # ═══ CERCANÍA Y BIENESTAR (Redondeadas, perfectas para pediatría o spa) ═══
+  ["Quicksand-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/quicksand/static/Quicksand-Regular.ttf"
+  ["Quicksand-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/quicksand/static/Quicksand-Bold.ttf"
+  ["Rubik-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/static/Rubik-Regular.ttf"
+  ["Rubik-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/static/Rubik-Bold.ttf"
+
+  # ═══ ESTILO BOUTIQUE (Geométricas con mucho carácter) ═══
+  ["JosefinSans-Regular"]="https://raw.githubusercontent.com/google/fonts/main/ofl/josefinsans/static/JosefinSans-Regular.ttf"
+  ["JosefinSans-Bold"]="https://raw.githubusercontent.com/google/fonts/main/ofl/josefinsans/static/JosefinSans-Bold.ttf"
 )
 
 echo "Downloading fonts to $FONTS_DIR..."
