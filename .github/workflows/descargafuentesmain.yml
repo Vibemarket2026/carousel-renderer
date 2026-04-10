@@ -1,0 +1,35 @@
+name: descargafuentesmain
+on: workflow_dispatch 
+
+permissions:
+  contents: write
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # CRÍTICO: Le dice a GitHub que se baje todo el historial para poder hacer push sin conflictos
+
+      - name: Ejecutar script
+        run: |
+          chmod +x download-fonts.sh
+          ./download-fonts.sh
+
+      - name: Guardar fuentes en el repo
+        run: |
+          # 1. Configuramos el bot con el email oficial correcto
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 2. Añadimos los archivos y creamos el commit
+          git add .
+          git commit -m "Fuentes descargadas mediante script" || echo "Sin cambios"
+          
+          # 3. Bajamos lo nuevo de GitHub y lo fusionamos limpiamente
+          git pull --rebase --autostash -X theirs origin main
+          
+          # 4. Subimos el resultado final asegurando la rama
+          git push origin main
