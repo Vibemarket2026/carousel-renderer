@@ -4,10 +4,8 @@
       "src": "api/render-slide.ts",
       "use": "@vercel/node",
       "config": {
-    
-        "memory": 1024, 
+        "memory": 1024,
         "maxDuration": 30,
-   
         "includeFiles": "fonts/**"
       }
     }

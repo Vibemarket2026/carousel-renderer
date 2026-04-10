@@ -1,94 +1,21 @@
 // /api/render-slide.ts
-//import type { VercelRequest, VercelResponse } from '@vercel/node';
+// Vibemarket Render Engine v2.0 - API Endpoint
+// POST /api/render-slide → receives slide data → returns PNG base64
+
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { generateSlideJSX } from '../lib/templates.js';
+import { RenderSlideRequest, RenderSlideResponse } from '../lib/types.js';
+import { composeSlide, autoSelectDesign } from '../lib/composer.js';
+import { loadFonts } from '../lib/fonts.js';
 
-interface RenderSlideRequest {
-  slide_number: number;
-  total_slides: number;
-  slide_type: 'cover' | 'content' | 'cta';
-  title: string;
-  subtitle?: string;
-  body_text?: string;
-  emoji?: string;
-  brand: {
-    name: string;
-    color_primary: string;
-    color_secondary: string;
-    font_family: string;
-    logoUrl: string | null;
-  };
-  template: string;
-  asset_url?: string | null;
-  use_asset_as?: 'featured' | 'background' | null;
-  output?: {
-    width: number;
-    height: number;
-    format: string;
-  };
-}
-
-interface SatoriFont {
-  name: string;
-  data: Buffer;
-  weight: number;
-  style: 'normal' | 'italic';
-}
-
-// Font loading function
-async function loadFonts(fontFamily: string): Promise<SatoriFont[]> {
-  const fonts: SatoriFont[] = [];
-  
-  const fontMap: Record<string, { file: string; weight: number }[]> = {
-    'Inter': [
-      { file: 'Inter-Regular.ttf', weight: 400 },
-      { file: 'Inter-Bold.ttf', weight: 700 },
-    ],
-    'Roboto': [
-      { file: 'Roboto-Regular.ttf', weight: 400 },
-      { file: 'Roboto-Bold.ttf', weight: 700 },
-    ],
-  };
-  
-  const fontFiles = fontMap[fontFamily] || fontMap['Inter'];
-  
-  for (const fontFile of fontFiles) {
-    try {
-      const fontPath = join(process.cwd(), 'fonts', fontFile.file);
-      const fontData = readFileSync(fontPath);
-      
-      fonts.push({
-        name: fontFamily,
-        data: fontData,
-        weight: fontFile.weight,
-        style: 'normal',
-      });
-    } catch (e) {
-      console.warn(`Failed to load font ${fontFile.file}:`, e);
-    }
-  }
-  
-  // Fallback: if no fonts loaded and not already trying Inter, try Inter
-  if (fonts.length === 0 && fontFamily !== 'Inter') {
-    return loadFonts('Inter');
-  }
-  
-  return fonts;
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
+// Use VercelRequest/VercelResponse types inline to avoid import issues
+export default async function handler(req: any, res: any) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -98,74 +25,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const body = req.body as RenderSlideRequest;
 
-    // Validate request
-    if (!body.slide_number || !body.slide_type || !body.title || !body.brand) {
+    // ── Validate ──────────────────────────────────────────────
+    if (!body.title || !body.brand) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        details: 'Required: slide_number, slide_type, title, brand'
-      });
+        details: 'Required: title, brand (with name, color_primary, color_secondary)',
+      } as RenderSlideResponse);
     }
 
-    // Load fonts
-    const fonts = await loadFonts(body.brand.font_family || 'Inter');
+    // ── Defaults ──────────────────────────────────────────────
+    const slideType = body.slide_type || 'content';
+    const slideNumber = body.slide_number || 1;
+    const totalSlides = body.total_slides || 7;
+    const width = body.output?.width || 1080;
+    const height = body.output?.height || 1350;
 
-    // Fetch asset image if exists
+    // Auto-select design if not specified
+    let mood = body.mood;
+    let layout = body.layout;
+    let decoration = body.decoration;
+
+    if (!mood || !layout || !decoration) {
+      const auto = autoSelectDesign(slideType, slideNumber, totalSlides);
+      mood = mood || auto.mood;
+      layout = layout || auto.layout;
+      decoration = decoration || auto.decoration;
+    }
+
+    // Ensure brand has required fields
+    const brand = {
+      name: body.brand.name || 'Brand',
+      color_primary: body.brand.color_primary || '#333333',
+      color_secondary: body.brand.color_secondary || '#666666',
+      font_heading: body.brand.font_heading || 'Inter',
+      font_body: body.brand.font_body || 'Inter',
+      logo_url: body.brand.logo_url || null,
+    };
+
+    // ── Fetch asset image if provided ─────────────────────────
     let assetImageData: string | null = null;
     if (body.asset_url) {
       try {
         const response = await fetch(body.asset_url);
         if (response.ok) {
           const buffer = Buffer.from(await response.arrayBuffer());
-          assetImageData = `data:image/png;base64,${buffer.toString('base64')}`;
+          const contentType = response.headers.get('content-type') || 'image/png';
+          assetImageData = `data:${contentType};base64,${buffer.toString('base64')}`;
         }
       } catch (e) {
-        console.warn('Failed to fetch asset image:', e);
-        // Continue without asset
+        console.warn('Failed to fetch asset:', e);
       }
     }
 
-    // Generate slide structure
-    const slideStructure = generateSlideJSX({
-      ...body,
-      assetImageData: assetImageData,
+    // ── Compose the slide ─────────────────────────────────────
+    const slideNode = composeSlide(
+      { ...body, mood, layout, decoration, brand },
+      assetImageData
+    );
+
+    // ── Load fonts ────────────────────────────────────────────
+    const fonts = await loadFonts(brand.font_heading, brand.font_body);
+
+    // ── Render with Satori ────────────────────────────────────
+    const svg = await satori(slideNode as any, {
+      width,
+      height,
+      fonts,
     });
 
-    const width = body.output?.width || 1080;
-    const height = body.output?.height || 1350;
-
-    // Render to SVG with Satori
-    const svg = await satori(slideStructure as any, {
-      width: width,
-      height: height,
-      fonts: fonts,
-    });
-
-    // Convert SVG to PNG with Resvg
+    // ── Convert to PNG with Resvg ─────────────────────────────
     const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: 'width',
-        value: width,
-      },
+      fitTo: { mode: 'width', value: width },
     });
-
     const pngData = resvg.render();
     const pngBuffer = pngData.asPng();
-
-    // Convert to base64
-    const imageBase64 = pngBuffer.toString('base64');
 
     const renderTime = Date.now() - startTime;
 
     return res.status(200).json({
       success: true,
-      image_base64: imageBase64,
-      dimensions: {
-        width: width,
-        height: height,
-      },
+      image_base64: pngBuffer.toString('base64'),
+      dimensions: { width, height },
       render_time_ms: renderTime,
-    });
+    } as RenderSlideResponse);
 
   } catch (error) {
     console.error('Render error:', error);
@@ -173,6 +116,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: 'Render failed',
       details: error instanceof Error ? error.message : 'Unknown error',
-    });
+    } as RenderSlideResponse);
   }
 }

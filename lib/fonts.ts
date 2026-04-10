@@ -1,5 +1,9 @@
+// /lib/fonts.ts
+// Font loading with in-memory cache for Vercel warm instances
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { FONT_REGISTRY } from './types.js';
 
 interface SatoriFont {
   name: string;
@@ -10,74 +14,69 @@ interface SatoriFont {
 
 const fontCache: Map<string, SatoriFont[]> = new Map();
 
-export async function loadFonts(fontFamily: string): Promise<SatoriFont[]> {
-  // Check cache
-  if (fontCache.has(fontFamily)) {
-    return fontCache.get(fontFamily)!;
+export async function loadFonts(headingFont: string, bodyFont: string): Promise<SatoriFont[]> {
+  const cacheKey = `${headingFont}|${bodyFont}`;
+  if (fontCache.has(cacheKey)) {
+    return fontCache.get(cacheKey)!;
   }
 
   const fonts: SatoriFont[] = [];
-  
-  try {
-    // Map font family to file names
-    const fontFiles = getFontFiles(fontFamily);
-    
-    for (const fontFile of fontFiles) {
+  const loadedFiles = new Set<string>();
+
+  // Load heading font
+  const headingFiles = FONT_REGISTRY[headingFont] || FONT_REGISTRY['Inter'];
+  for (const entry of headingFiles) {
+    if (!loadedFiles.has(entry.file)) {
       try {
-        const fontPath = join(__dirname, '..', 'fonts', fontFile.file);
-        const fontData = readFileSync(fontPath);
-        
+        const fontPath = join(process.cwd(), 'fonts', entry.file);
         fonts.push({
-          name: fontFamily,
-          data: fontData,
-          weight: fontFile.weight,
-          style: 'normal',
+          name: headingFont,
+          data: readFileSync(fontPath),
+          weight: entry.weight,
+          style: entry.style,
         });
+        loadedFiles.add(entry.file);
       } catch (e) {
-        console.warn(`Failed to load font ${fontFile.file}:`, e);
+        console.warn(`Font not found: ${entry.file}, falling back`);
       }
     }
-    
-    // If no fonts loaded, fall back to Inter
-    if (fonts.length === 0 && fontFamily !== 'Inter') {
-      return loadFonts('Inter');
-    }
-    
-    // Cache fonts
-    fontCache.set(fontFamily, fonts);
-    
-    return fonts;
-  } catch (error) {
-    console.error('Error loading fonts:', error);
-    
-    // Return empty array - Satori will use fallback
-    return [];
   }
-}
 
-function getFontFiles(fontFamily: string): { file: string; weight: number }[] {
-  const fontMap: Record<string, { file: string; weight: number }[]> = {
-    'Inter': [
-      { file: 'Inter-Regular.ttf', weight: 400 },
-      { file: 'Inter-Bold.ttf', weight: 700 },
-    ],
-    'Roboto': [
-      { file: 'Roboto-Regular.ttf', weight: 400 },
-      { file: 'Roboto-Bold.ttf', weight: 700 },
-    ],
-    'Open Sans': [
-      { file: 'OpenSans-Regular.ttf', weight: 400 },
-      { file: 'OpenSans-Bold.ttf', weight: 700 },
-    ],
-    'Montserrat': [
-      { file: 'Montserrat-Regular.ttf', weight: 400 },
-      { file: 'Montserrat-Bold.ttf', weight: 700 },
-    ],
-    'Poppins': [
-      { file: 'Poppins-Regular.ttf', weight: 400 },
-      { file: 'Poppins-Bold.ttf', weight: 700 },
-    ],
-  };
-  
-  return fontMap[fontFamily] || fontMap['Inter'];
+  // Load body font (if different from heading)
+  if (bodyFont !== headingFont) {
+    const bodyFiles = FONT_REGISTRY[bodyFont] || FONT_REGISTRY['Inter'];
+    for (const entry of bodyFiles) {
+      if (!loadedFiles.has(entry.file)) {
+        try {
+          const fontPath = join(process.cwd(), 'fonts', entry.file);
+          fonts.push({
+            name: bodyFont,
+            data: readFileSync(fontPath),
+            weight: entry.weight,
+            style: entry.style,
+          });
+          loadedFiles.add(entry.file);
+        } catch (e) {
+          console.warn(`Font not found: ${entry.file}, falling back`);
+        }
+      }
+    }
+  }
+
+  // Fallback: ensure at least Inter is loaded
+  if (fonts.length === 0) {
+    try {
+      const regularPath = join(process.cwd(), 'fonts', 'Inter-Regular.ttf');
+      const boldPath = join(process.cwd(), 'fonts', 'Inter-Bold.ttf');
+      fonts.push(
+        { name: 'Inter', data: readFileSync(regularPath), weight: 400, style: 'normal' },
+        { name: 'Inter', data: readFileSync(boldPath), weight: 700, style: 'normal' },
+      );
+    } catch (e) {
+      console.error('CRITICAL: Cannot load fallback Inter fonts');
+    }
+  }
+
+  fontCache.set(cacheKey, fonts);
+  return fonts;
 }
