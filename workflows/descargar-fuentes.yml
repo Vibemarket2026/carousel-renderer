@@ -22,5 +22,5 @@ jobs:
           git config --global user.email "github-actions[bot]@://github.com"
           git add .
           git commit -m "Fuentes descargadas mediante script" || echo "Sin cambios"
-          git pull --rebase --autostash -X theirs origin main
+          git pull
           git push
