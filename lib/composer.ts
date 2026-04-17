@@ -97,6 +97,7 @@ export function composeSlide(request: RenderSlideRequest, assetImageData?: strin
     palette,
     width,
     height,
+    mood,
   });
 
   // 3. Generate decoration elements
