@@ -41,43 +41,43 @@ function s(base: number, width: number): number {
 // the preview lies. Mobile feed is the source of truth.
 
 const TYPE = {
-  // Titles
-  titleCover:     110,  // cover slide main title
-  titleContent:    84,  // content slide title
-  titleLeft:       88,  // left_aligned layout title
-  titleCta:        72,  // CTA final brand name
-  titleQuote:      60,  // quote text (italic, needs to breathe)
+  // Titles (Ligeramente aumentados para mayor impacto)
+  titleCover:     120,  // Antes 110
+  titleContent:    96,  // Antes 84
+  titleLeft:       96,  // Antes 88
+  titleCta:        84,  // Antes 72
+  titleQuote:      72,  // Antes 60
 
-  // Body & supporting
-  bodyLarge:       42,  // main body text on content slides
-  bodyMedium:      38,  // body on split panel right side
-  bodyCta:         40,  // CTA description text
-  bodyStatLabel:   44,  // stat_label under big number
-  bodyQuote:       28,  // quote attribution
+  // Body & supporting (AUMENTO DRÁSTICO: Clave para legibilidad en móvil)
+  bodyLarge:       54,  // Antes 42
+  bodyMedium:      48,  // Antes 38
+  bodyCta:         50,  // Antes 40
+  bodyStatLabel:   56,  // Antes 44
+  bodyQuote:       42,  // Antes 28 (Era ilegible)
 
-  // Labels & micro
-  subtitle:        30,  // category label / eyebrow
-  subtitleSmall:   26,  // subtitle on split panel
-  swipeCta:        32,  // "Desliza →" button
-  ctaButton:       34,  // final CTA button text
+  // Labels & micro (Subidos al umbral mínimo de lectura en pantallas pequeñas)
+  subtitle:        40,  // Antes 30
+  subtitleSmall:   36,  // Antes 26
+  swipeCta:        40,  // Antes 32
+  ctaButton:       46,  // Antes 34
 
-  // Footers & meta
-  brandFooter:     26,  // brand name at bottom
-  slideCounter:    28,  // "2/7" counter
-  source:          26,  // source attribution under stats
+  // Footers & meta (Tamaño mínimo funcional)
+  brandFooter:     34,  // Antes 26
+  slideCounter:    36,  // Antes 28
+  source:          32,  // Antes 26
 
-  // Big stat
-  statNumber:     240,  // the giant number
-  statNumberPanel: 110, // stat number inside split panel
+  // Big stat (Mantenidos grandes, pequeño ajuste proporcional)
+  statNumber:     260,  // Antes 240
+  statNumberPanel: 120, // Antes 110
 
-  // Emojis & quote marks
-  emoji:          120,
-  emojiSmall:      90,
-  quoteMark:      200,
+  // Emojis & quote marks (Escalados proporcionalmente)
+  emoji:          130,  // Antes 120
+  emojiSmall:     100,  // Antes 90
+  quoteMark:      220,  // Antes 200
 
   // Accent elements
-  accentLineW:    120,  // horizontal accent line width
-  accentLineH:      5,  // accent line thickness
+  accentLineW:    120,  
+  accentLineH:      6,  // Un píxel más de grosor para que no se pierda al comprimir
 };
 
 // ── Mood typography multipliers ──────────────────────────────
