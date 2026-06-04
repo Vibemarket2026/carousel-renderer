@@ -1,14 +1,5 @@
 // /lib/layouts.ts
 // 6 layout modules using pure flexbox - zero fixed coordinates
-// Each layout adapts to any text length via flex properties
-// The palette comes from contrast.ts derivePalette()
-//
-// FOOTER CONVENTION (Nov 2025 revision):
-//   - Brand name: always bottom-left  (bottom: 40px, left: 60-70px)
-//   - Slide counter: always bottom-right (bottom: 40px, right: 60-70px)
-// Previously big_stat and centered placed the counter at top-right, which
-// was inconsistent with left_aligned/quote_block AND collided with
-// top-aligned decorations (geometric_circles top-right arc).
 
 import { SatoriNode, LayoutName } from './types.js';
 import { DerivedPalette, withOpacity } from './contrast.js';
@@ -41,10 +32,13 @@ function s(base: number, width: number): number {
 }
 
 const TYPE = {
-  titleCover:     120,
-  titleContent:    96,
-  titleLeft:       96,
-  titleCta:        84,
+  // Cover title lowered from 120 to 104 (Nov 2025). At 120 a long single
+  // word like "Psicomotricidad" rendered in heading-bold exceeded the
+  // 920px maxWidth and was clipped by the canvas edge. 104 leaves room.
+  titleCover:     104,  // was 120
+  titleContent:    92,  // was 96 — same long-word concern, smaller margin
+  titleLeft:       92,  // was 96
+  titleCta:        80,  // was 84
   titleQuote:      72,
 
   bodyLarge:       54,
@@ -101,11 +95,29 @@ function t(
   return s(Math.round(base * mult), width);
 }
 
-// ── Shared footer helper ───────────────────────────────────
-// Returns the brand name (bottom-left) and slide counter (bottom-right)
-// as two absolute-positioned siblings. Used by centered + big_stat to
-// guarantee consistency with the bottom-bar layouts.
+// ── Long-word safety helper ─────────────────────────────────
+// If a title contains a single word longer than `threshold` characters
+// (common in Spanish: "Psicomotricidad", "Responsabilidad", "Profesionalísimo"),
+// scale the font down proportionally so it doesn't clip the canvas edge.
+// Keeps the design impactful without breaking layout. Returns a multiplier
+// in the range [0.7, 1.0].
 
+function longWordScale(text: string, threshold = 13): number {
+  const longest = Math.max(...text.split(/\s+/).map(w => w.length), 0);
+  if (longest <= threshold) return 1.0;
+  // 14 chars → 0.93, 16 chars → 0.81, 18 chars → 0.72
+  return Math.max(0.7, threshold / longest);
+}
+
+// Title styles always carry wordBreak/overflowWrap so that even if the
+// auto-scale isn't aggressive enough (or a brand chooses an extreme font),
+// Satori will break the word at character level rather than overflow.
+const TITLE_BREAK_STYLE = {
+  wordBreak: 'break-word' as const,
+  overflowWrap: 'break-word' as const,
+};
+
+// ── Shared footer helper ──────────────────────────────────
 function footerElements(
   input: LayoutInput,
   p: DerivedPalette,
@@ -195,18 +207,22 @@ function layoutCentered(input: LayoutInput): SatoriNode {
   }
 
   const isCover = input.slide_type === 'cover';
+  const titleToken = isCover ? 'titleCover' : 'titleContent';
+  const titleBase = t(titleToken, mood, w, 'title');
+  const titleScale = longWordScale(input.title);
   content.push({
     type: 'div',
     props: {
       style: {
-        fontSize: `${t(isCover ? 'titleCover' : 'titleContent', mood, w, 'title')}px`,
+        fontSize: `${Math.round(titleBase * titleScale)}px`,
         fontWeight: 700,
         color: input.use_asset_as === 'background' ? '#FFFFFF' : p.textTitle,
         fontFamily: font_heading,
         textAlign: 'center',
         lineHeight: 1.1,
-        maxWidth: `${s(920, w)}px`,
+        maxWidth: `${s(940, w)}px`,
         marginTop: `${s(20, w)}px`,
+        ...TITLE_BREAK_STYLE,
       },
       children: input.title,
     },
@@ -281,7 +297,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Footer: brand bottom-left, counter bottom-right (only on content/big_stat).
   const showCounter = input.slide_type === 'content' || input.slide_type === 'big_stat';
   children.push(...footerElements(input, p, w, showCounter));
 
@@ -304,17 +319,20 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     });
   }
 
+  const titleBase = t('titleLeft', mood, w, 'title');
+  const titleScale = longWordScale(input.title);
   content.push({
     type: 'div',
     props: {
       style: {
-        fontSize: `${t('titleLeft', mood, w, 'title')}px`,
+        fontSize: `${Math.round(titleBase * titleScale)}px`,
         fontWeight: 700,
         color: p.textTitle,
         fontFamily: font_heading,
         lineHeight: 1.08,
-        maxWidth: `${s(870, w)}px`,
+        maxWidth: `${s(890, w)}px`,
         marginTop: `${s(20, w)}px`,
+        ...TITLE_BREAK_STYLE,
       },
       children: input.title,
     },
@@ -357,7 +375,6 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Bottom bar: brand left, counter right.
   children.push({
     type: 'div',
     props: {
@@ -462,9 +479,6 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Footer: brand bottom-left, counter bottom-right (previously the counter
-  // sat at top-right, which broke consistency and collided with the
-  // top-right decoration arc in geometric_circles / corner_block / dots).
   children.push(...footerElements(input, p, w, true));
 
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
@@ -539,12 +553,19 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
     });
   }
 
+  const titleBase = t('titleContent', mood, w, 'title');
+  const titleScale = longWordScale(input.title);
   rightChildren.push({
     type: 'div',
     props: {
       style: {
-        fontSize: `${t('titleContent', mood, w, 'title')}px`, fontWeight: 700, color: p.textTitle, fontFamily: font_heading,
-        lineHeight: 1.12, marginTop: `${s(14, w)}px`,
+        fontSize: `${Math.round(titleBase * titleScale)}px`,
+        fontWeight: 700,
+        color: p.textTitle,
+        fontFamily: font_heading,
+        lineHeight: 1.12,
+        marginTop: `${s(14, w)}px`,
+        ...TITLE_BREAK_STYLE,
       },
       children: input.title,
     },
@@ -621,10 +642,12 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
     type: 'div',
     props: {
       style: {
-        fontSize: `${t('titleQuote', mood, w, 'title')}px`, fontWeight: 400, fontStyle: 'italic',
+        fontSize: `${t('titleQuote', mood, w, 'title')}px`,
+        fontWeight: 400, fontStyle: 'italic',
         color: p.textTitle, fontFamily: font_heading,
         textAlign: 'center', lineHeight: 1.35, maxWidth: `${s(860, w)}px`,
         marginTop: `${s(14, w)}px`,
+        ...TITLE_BREAK_STYLE,
       },
       children: input.title,
     },
@@ -673,7 +696,7 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT 6: CTA FINAL ───────────────────────────────────
+// ── LAYOUT 6: CTA FINAL ─────────────────────────────────
 function layoutCtaFinal(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
@@ -689,12 +712,19 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
     });
   }
 
+  const ctaTitleBase = t('titleCta', mood, w, 'title');
+  const ctaTitleScale = longWordScale(input.brand_name);
   content.push({
     type: 'div',
     props: {
       style: {
-        fontSize: `${t('titleCta', mood, w, 'title')}px`, fontWeight: 700, color: p.textTitle, fontFamily: font_heading,
-        textAlign: 'center', lineHeight: 1.15,
+        fontSize: `${Math.round(ctaTitleBase * ctaTitleScale)}px`,
+        fontWeight: 700,
+        color: p.textTitle,
+        fontFamily: font_heading,
+        textAlign: 'center',
+        lineHeight: 1.15,
+        ...TITLE_BREAK_STYLE,
       },
       children: input.brand_name,
     },

@@ -9,6 +9,68 @@ import { composeSlide, autoSelectDesign } from '../lib/composer.js';
 import { loadFonts } from '../lib/fonts.js';
 import { convertSlideToFabric } from '../lib/fabric-converter.js';
 
+// ── Emoji loading via Twemoji (Nov 2025) ─────────────────────────
+//
+// Satori does NOT render emojis with the loaded text fonts — they come out
+// as empty box glyphs ("tofu"). The supported pattern is `loadAdditionalAsset`
+// which returns an image URL/data-URI for each emoji segment, and Satori
+// inlines it as an <img> at the right size.
+//
+// We use Twemoji SVGs hosted on jsDelivr — these are the same emoji set
+// Twitter/X used to use, freely licensed (CC-BY 4.0), and rendered as crisp
+// vector glyphs at any size.
+//
+// In-memory cache: a warm Vercel instance keeps fetched SVGs around so the
+// same emoji used across slides only triggers one CDN fetch.
+
+const emojiCache: Map<string, string> = new Map();
+
+function toEmojiCodepoint(segment: string): string {
+  // Twemoji filenames concatenate codepoints with `-`, lowercase hex,
+  // and STRIP the variation selector U+FE0F (used for emoji vs text style).
+  // Reference: https://github.com/twitter/twemoji#download
+  const codepoints: string[] = [];
+  for (const ch of segment) {
+    const cp = ch.codePointAt(0);
+    if (cp === undefined) continue;
+    const hex = cp.toString(16);
+    if (hex === 'fe0f') continue; // variation selector, skip
+    codepoints.push(hex);
+  }
+  return codepoints.join('-');
+}
+
+async function fetchEmojiSvg(segment: string): Promise<string | null> {
+  const cached = emojiCache.get(segment);
+  if (cached !== undefined) return cached;
+
+  const codepoint = toEmojiCodepoint(segment);
+  if (!codepoint) {
+    emojiCache.set(segment, '');
+    return null;
+  }
+
+  // Twemoji 14.0.2 is the last freely-pinnable jsDelivr build.
+  const url = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${codepoint}.svg`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`[emoji] Twemoji miss for "${segment}" (${codepoint}): HTTP ${response.status}`);
+      emojiCache.set(segment, '');
+      return null;
+    }
+    const svg = await response.text();
+    const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+    emojiCache.set(segment, dataUri);
+    return dataUri;
+  } catch (e) {
+    console.warn(`[emoji] Fetch error for "${segment}":`, e);
+    emojiCache.set(segment, '');
+    return null;
+  }
+}
+
 export default async function handler(req: any, res: any) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,7 +87,6 @@ export default async function handler(req: any, res: any) {
   try {
     const body = req.body as RenderSlideRequest;
 
-    // ── Validate ──────────────────────────────────────────────
     if (!body.title || !body.brand) {
       return res.status(400).json({
         success: false,
@@ -34,7 +95,6 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // ── Defaults ──────────────────────────────────────────────
     const slideType = body.slide_type || 'content';
     const slideNumber = body.slide_number || 1;
     const totalSlides = body.total_slides || 7;
@@ -61,7 +121,7 @@ export default async function handler(req: any, res: any) {
       logo_url: body.brand.logo_url || null,
     };
 
-    // ── Fetch asset image if provided ─────────────────────────
+    // ── Fetch asset image if provided ──────────────────────────
     let assetImageData: string | null = null;
     if (body.asset_url) {
       try {
@@ -76,30 +136,41 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // ── Compose the slide ─────────────────────────────────────
+    // ── Compose the slide ──────────────────────────────────
     const slideNode = composeSlide(
       { ...body, mood, layout, decoration, brand },
       assetImageData
     );
 
-    // ── Load fonts ────────────────────────────────────────────
+    // ── Load fonts ─────────────────────────────────────────
     const fonts = await loadFonts(brand.font_heading, brand.font_body);
 
-    // ── Render with Satori → SVG ──────────────────────────────
+    // ── Render with Satori → SVG (with emoji support) ───────────────────
     const svg = await satori(slideNode as any, {
       width,
       height,
       fonts,
+      // When Satori encounters an emoji it can't render with the loaded
+      // fonts, it calls this with code='emoji' and segment=<emoji string>.
+      // We return a data URI for a Twemoji SVG and Satori inlines it.
+      loadAdditionalAsset: async (code: string, segment: string) => {
+        if (code === 'emoji') {
+          const dataUri = await fetchEmojiSvg(segment);
+          return dataUri || '';
+        }
+        // Unsupported asset type — return empty so Satori falls back gracefully.
+        return '';
+      },
     });
 
-    // ── Convert SVG → PNG ─────────────────────────────────────
+    // ── Convert SVG → PNG ────────────────────────────────────
     const resvg = new Resvg(svg, {
       fitTo: { mode: 'width', value: width },
     });
     const pngData = resvg.render();
     const pngBuffer = pngData.asPng();
 
-    // ── Convert SVG → Fabric.js JSON for editor ───────────────
+    // ── Convert SVG → Fabric.js JSON for editor ──────────────────────
     const fabricData = convertSlideToFabric(svg, {
       slide_number: slideNumber,
       slide_type: slideType,
