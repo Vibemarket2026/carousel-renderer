@@ -1,11 +1,8 @@
 // /lib/contrast.ts
 // WCAG 2.1 contrast validation + automatic color adjustment
-// Ensures all text is readable regardless of user brand colors
 
 interface RGB { r: number; g: number; b: number; }
 interface HSL { h: number; s: number; l: number; }
-
-// ── Parse & Convert ──────────────────────────────────────────
 
 export function hexToRgb(hex: string): RGB {
   hex = hex.replace('#', '');
@@ -64,8 +61,6 @@ export function hslToRgb(hsl: HSL): RGB {
   };
 }
 
-// ── WCAG Luminance & Contrast ────────────────────────────────
-
 function relativeLuminance(rgb: RGB): number {
   const srgb = [rgb.r, rgb.g, rgb.b].map(c => {
     const s = c / 255;
@@ -89,8 +84,6 @@ export function isLightColor(hex: string): boolean {
 export function isDarkColor(hex: string): boolean {
   return relativeLuminance(hexToRgb(hex)) < 0.15;
 }
-
-// ── Color Manipulation ───────────────────────────────────────
 
 export function lighten(hex: string, amount: number): string {
   const hsl = rgbToHsl(hexToRgb(hex));
@@ -121,8 +114,6 @@ export function withOpacity(hex: string, alpha: number): string {
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
 }
 
-// ── Pastel Generation (for soft_pastel mood) ─────────────────
-
 export function toPastel(hex: string): string {
   const hsl = rgbToHsl(hexToRgb(hex));
   hsl.s = Math.min(0.35, hsl.s * 0.5);
@@ -144,37 +135,25 @@ export function toPastelMid(hex: string): string {
   return rgbToHex(hslToRgb(hsl));
 }
 
-// ── Smart Text Color Selection ───────────────────────────────
-// Given a background color, returns the best text color
-// that meets WCAG AA (4.5:1 for normal text, 3:1 for large text)
-
 export function textColorOnBg(bgHex: string, brandHex?: string): string {
-  // Try white first
   if (contrastRatio(bgHex, '#FFFFFF') >= 4.5) return '#FFFFFF';
-  // Try near-white
   if (contrastRatio(bgHex, '#F0F0F0') >= 4.5) return '#F0F0F0';
-  // Try brand-derived dark
   if (brandHex) {
     const brandDark = setLightness(brandHex, 0.15);
     if (contrastRatio(bgHex, brandDark) >= 4.5) return brandDark;
   }
-  // Try near-black
   if (contrastRatio(bgHex, '#1A1A1A') >= 4.5) return '#1A1A1A';
-  // Fallback
   return isLightColor(bgHex) ? '#000000' : '#FFFFFF';
 }
 
 export function subtitleColorOnBg(bgHex: string, brandHex?: string): string {
-  // Subtitle needs 3:1 (large text) and should be softer than title
   if (isLightColor(bgHex)) {
-    // Light bg: muted dark
     if (brandHex) {
       const muted = setLightness(brandHex, 0.35);
       if (contrastRatio(bgHex, muted) >= 3) return muted;
     }
     return '#6B7280';
   } else {
-    // Dark bg: muted light
     if (brandHex) {
       const muted = setLightness(brandHex, 0.7);
       if (contrastRatio(bgHex, muted) >= 3) return muted;
@@ -184,9 +163,7 @@ export function subtitleColorOnBg(bgHex: string, brandHex?: string): string {
 }
 
 export function accentColorOnBg(bgHex: string, brandSecondary: string): string {
-  // Accent (category labels, CTA borders) — needs 3:1 minimum
   if (contrastRatio(bgHex, brandSecondary) >= 3) return brandSecondary;
-  // Adjust secondary to meet contrast
   const hsl = rgbToHsl(hexToRgb(brandSecondary));
   if (isLightColor(bgHex)) {
     hsl.l = Math.min(hsl.l, 0.4);
@@ -195,15 +172,15 @@ export function accentColorOnBg(bgHex: string, brandSecondary: string): string {
   }
   const adjusted = rgbToHex(hslToRgb(hsl));
   if (contrastRatio(bgHex, adjusted) >= 3) return adjusted;
-  // Last resort
   return isLightColor(bgHex) ? darken(brandSecondary, 0.3) : lighten(brandSecondary, 0.3);
 }
 
-// ── Derive Full Palette From 2 Brand Colors ──────────────────
-// This is the key function: given any pair of brand colors,
-// produce a safe, harmonious palette for any mood.
-// Contrast levels boosted (Nov 2025) so secondary text (body, footers,
-// stat sources) stays readable in IG mobile feed at ~470px.
+// ── Derive Full Palette ──────────────────────────────────────
+// Nov 2025: text contrast aggressively boosted. Secondary text (textBody,
+// textMuted) was previously too faint on light/pastel modes, making
+// explanatory text in big_stat slides unreadable on IG mobile feed.
+// Also: pastel textBody now uses a near-black neutral instead of
+// brand-tinted color so the contrast is guaranteed regardless of brand hue.
 
 export interface DerivedPalette {
   bgMain: string;
@@ -231,12 +208,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: darken(primary, 0.3),
         textTitle: '#FFFFFF',
-        textBody: withOpacity('#FFFFFF', 0.88),   // was 0.7
-        textMuted: withOpacity('#FFFFFF', 0.65),  // was 0.4
+        textBody: withOpacity('#FFFFFF', 0.92),
+        textMuted: withOpacity('#FFFFFF', 0.72),
         accent: accentColorOnBg(bg, secondary),
-        accentSoft: withOpacity(secondary, 0.18),
-        decorationColor: withOpacity(secondary, 0.22),
-        decorationSoft: withOpacity(primary, 0.18),
+        accentSoft: withOpacity(secondary, 0.2),
+        decorationColor: withOpacity(secondary, 0.3),
+        decorationSoft: withOpacity(primary, 0.25),
         gradientFrom: darken(primary, 0.38),
         gradientTo: darken(secondary, 0.3),
       };
@@ -247,12 +224,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: primary,
         textTitle: textColorOnBg(bg, primary),
-        textBody: '#3A3A3A',   // was '#555555'
-        textMuted: '#6B6B6B',  // was '#999999'
+        textBody: '#2A2A2A',
+        textMuted: '#555555',
         accent: accentColorOnBg(bg, primary),
         accentSoft: lighten(primary, 0.3),
-        decorationColor: primary,
-        decorationSoft: lighten(primary, 0.35),
+        decorationColor: setLightness(primary, 0.55),
+        decorationSoft: lighten(primary, 0.25),
         gradientFrom: bg,
         gradientTo: '#F0F0EE',
       };
@@ -263,12 +240,12 @@ export function derivePalette(
         bgMain: primary,
         bgPanel: darken(primary, 0.1),
         textTitle: title,
-        textBody: withOpacity(title, 0.88),   // was subtitleColorOnBg(primary) ~0.7
-        textMuted: withOpacity(title, 0.68),  // was 0.4
+        textBody: withOpacity(title, 0.92),
+        textMuted: withOpacity(title, 0.75),
         accent: accentColorOnBg(primary, secondary),
         accentSoft: withOpacity(secondary, 0.22),
-        decorationColor: withOpacity(secondary, 0.28),
-        decorationSoft: withOpacity(title === '#FFFFFF' ? '#000000' : '#FFFFFF', 0.12),
+        decorationColor: withOpacity(secondary, 0.32),
+        decorationSoft: withOpacity(title === '#FFFFFF' ? '#000000' : '#FFFFFF', 0.14),
         gradientFrom: primary,
         gradientTo: darken(primary, 0.15),
       };
@@ -279,12 +256,15 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: toPastel(secondary),
         textTitle: toPastelDark(primary),
-        textBody: setLightness(primary, 0.28),   // was toPastelMid (~0.4) → push darker
-        textMuted: setLightness(primary, 0.42),  // was lighten(toPastelMid, 0.15) → stays readable
-        accent: setLightness(primary, 0.32),
-        accentSoft: withOpacity(primary, 0.15),
-        decorationColor: withOpacity(primary, 0.14),
-        decorationSoft: withOpacity(secondary, 0.10),
+        // Use a near-black neutral so contrast is rock-solid on any pastel bg.
+        // (Previously used setLightness(primary, 0.28) which on cyan/teal
+        //  brands like Fisiobárica produced a teal that was still too pale.)
+        textBody: '#2A2A2A',
+        textMuted: '#5A5A5A',
+        accent: setLightness(primary, 0.3),
+        accentSoft: withOpacity(primary, 0.18),
+        decorationColor: setLightness(primary, 0.5),
+        decorationSoft: withOpacity(secondary, 0.18),
         gradientFrom: bg,
         gradientTo: toPastel(secondary),
       };
@@ -295,8 +275,8 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: primary,
         textTitle: textColorOnBg(bg, primary),
-        textBody: '#4A4A4A',   // was '#666666'
-        textMuted: '#7A7A7A',  // was '#AAAAAA'
+        textBody: '#2A2A2A',
+        textMuted: '#5A5A5A',
         accent: accentColorOnBg(bg, primary),
         accentSoft: lighten(primary, 0.35),
         decorationColor: secondary,
@@ -311,12 +291,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: darken(secondary, 0.2),
         textTitle: '#FFFFFF',
-        textBody: withOpacity('#FFFFFF', 0.85),   // was 0.65
-        textMuted: withOpacity('#FFFFFF', 0.62),  // was 0.35
+        textBody: withOpacity('#FFFFFF', 0.9),
+        textMuted: withOpacity('#FFFFFF', 0.7),
         accent: accentColorOnBg(bg, secondary),
-        accentSoft: withOpacity(secondary, 0.15),
-        decorationColor: withOpacity(secondary, 0.18),
-        decorationSoft: withOpacity(primary, 0.22),
+        accentSoft: withOpacity(secondary, 0.18),
+        decorationColor: withOpacity(secondary, 0.28),
+        decorationSoft: withOpacity(primary, 0.3),
         gradientFrom: darken(primary, 0.32),
         gradientTo: darken(secondary, 0.15),
       };

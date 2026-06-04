@@ -34,75 +34,63 @@ function s(base: number, width: number): number {
   return Math.round(base * (width / 1080));
 }
 
-// ── TYPOGRAPHIC TOKENS ───────────────────────────────────────
+// ── TYPOGRAPHIC TOKENS ────────────────────────────────────────
 // Base sizes in px assuming a 1080px-wide canvas. All are Instagram-first:
 // sized so they remain legible when IG re-scales the post to ~470px on mobile.
-// These are intentionally larger than what looks "nice" on a 1080px preview —
-// the preview lies. Mobile feed is the source of truth.
 
 const TYPE = {
-  // Titles (Ligeramente aumentados para mayor impacto)
-  titleCover:     120,  // Antes 110
-  titleContent:    96,  // Antes 84
-  titleLeft:       96,  // Antes 88
-  titleCta:        84,  // Antes 72
-  titleQuote:      72,  // Antes 60
+  titleCover:     120,
+  titleContent:    96,
+  titleLeft:       96,
+  titleCta:        84,
+  titleQuote:      72,
 
-  // Body & supporting (AUMENTO DRÁSTICO: Clave para legibilidad en móvil)
-  bodyLarge:       54,  // Antes 42
-  bodyMedium:      48,  // Antes 38
-  bodyCta:         50,  // Antes 40
-  bodyStatLabel:   56,  // Antes 44
-  bodyQuote:       42,  // Antes 28 (Era ilegible)
+  bodyLarge:       54,
+  bodyMedium:      48,
+  bodyCta:         50,
+  bodyStatLabel:   56,
+  bodyQuote:       42,
 
-  // Labels & micro (Subidos al umbral mínimo de lectura en pantallas pequeñas)
-  subtitle:        40,  // Antes 30
-  subtitleSmall:   36,  // Antes 26
-  swipeCta:        40,  // Antes 32
-  ctaButton:       46,  // Antes 34
+  subtitle:        40,
+  subtitleSmall:   36,
+  swipeCta:        40,
+  ctaButton:       46,
 
-  // Footers & meta (Tamaño mínimo funcional)
-  brandFooter:     34,  // Antes 26
-  slideCounter:    36,  // Antes 28
-  source:          32,  // Antes 26
+  // Footers & meta (Nov 2025: bumped — these were the worst legibility offenders
+  // on mobile feed at ~470px width)
+  brandFooter:     40,  // was 34
+  slideCounter:    40,  // was 36
+  source:          46,  // was 32 — fix for big_stat explanatory text being tiny
 
-  // Big stat (Mantenidos grandes, pequeño ajuste proporcional)
-  statNumber:     260,  // Antes 240
-  statNumberPanel: 120, // Antes 110
+  statNumber:     260,
+  statNumberPanel: 120,
 
-  // Emojis & quote marks (Escalados proporcionalmente)
-  emoji:          130,  // Antes 120
-  emojiSmall:     100,  // Antes 90
-  quoteMark:      220,  // Antes 200
+  emoji:          130,
+  emojiSmall:     100,
+  quoteMark:      220,
 
-  // Accent elements
-  accentLineW:    120,  
-  accentLineH:      6,  // Un píxel más de grosor para que no se pierda al comprimir
+  accentLineW:    120,
+  accentLineH:      6,
 };
 
-// ── Mood typography multipliers ──────────────────────────────
-// Impact-focused moods push type harder; editorial moods breathe more.
-// Only affects titles and stats — body & meta stay consistent.
-
+// ── Mood typography multipliers ─────────────────────────────
 function moodTypeScale(mood?: string): { title: number; stat: number; body: number } {
   switch (mood) {
     case 'bold_primary':
     case 'dark_minimal':
     case 'warm_gradient':
-      return { title: 1.0,  stat: 1.0,  body: 1.0  };  // full impact
+      return { title: 1.0,  stat: 1.0,  body: 1.0  };
     case 'color_block':
-      return { title: 0.95, stat: 1.0,  body: 1.0  };  // split layout is tighter
+      return { title: 0.95, stat: 1.0,  body: 1.0  };
     case 'light_clean':
-      return { title: 0.92, stat: 0.95, body: 0.98 };  // editorial, slightly lighter
+      return { title: 0.92, stat: 0.95, body: 0.98 };
     case 'soft_pastel':
-      return { title: 0.88, stat: 0.92, body: 0.95 };  // soft, airy
+      return { title: 0.88, stat: 0.92, body: 0.95 };
     default:
       return { title: 1.0,  stat: 1.0,  body: 1.0  };
   }
 }
 
-// Type-safe wrapper: get a scaled font size for the current mood.
-// Usage: t('titleCover', mood, w)  →  scaled px value
 function t(
   token: keyof typeof TYPE,
   mood: string | undefined,
@@ -114,15 +102,11 @@ function t(
   return s(Math.round(base * mult), width);
 }
 
-// ── LAYOUT 1: CENTERED ───────────────────────────────────────
-// Classic centered composition. Title + body stacked vertically.
-// Works for cover, content, and CTA slides.
-
+// ── LAYOUT 1: CENTERED ──────────────────────────────────────
 function layoutCentered(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
 
-  // Background image if provided
   if (input.use_asset_as === 'background' && input.asset_image_data) {
     children.push(
       { type: 'img', props: { src: input.asset_image_data, style: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } } },
@@ -130,10 +114,8 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     );
   }
 
-  // Content wrapper
   const content: (SatoriNode | string)[] = [];
 
-  // Category / slide number
   if (input.subtitle && input.slide_type !== 'cta') {
     content.push({
       type: 'span',
@@ -151,7 +133,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Emoji or featured asset
   if (input.use_asset_as === 'featured' && input.asset_image_data) {
     content.push({
       type: 'img',
@@ -164,7 +145,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Title
   const isCover = input.slide_type === 'cover';
   content.push({
     type: 'div',
@@ -183,7 +163,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Body text
   if (input.body_text) {
     content.push({
       type: 'div',
@@ -202,7 +181,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Accent line separator
   content.push({
     type: 'div',
     props: {
@@ -217,7 +195,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Swipe indicator for covers
   if (isCover) {
     content.push({
       type: 'span',
@@ -237,7 +214,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Brand footer
   children.push({
     type: 'div',
     props: {
@@ -256,7 +232,6 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Brand name at bottom
   children.push({
     type: 'div',
     props: {
@@ -265,15 +240,15 @@ function layoutCentered(input: LayoutInput): SatoriNode {
         bottom: `${s(40, w)}px`,
         left: `${s(60, w)}px`,
         fontSize: `${s(TYPE.brandFooter, w)}px`,
-        color: p.textMuted,
+        color: p.textBody,
         fontFamily: font_body,
+        fontWeight: 500,
         zIndex: 5,
       },
       children: input.brand_name,
     },
   });
 
-  // Slide counter
   if (input.slide_type === 'content' || input.slide_type === 'big_stat') {
     children.push({
       type: 'div',
@@ -283,7 +258,7 @@ function layoutCentered(input: LayoutInput): SatoriNode {
           top: `${s(40, w)}px`,
           right: `${s(40, w)}px`,
           fontSize: `${s(TYPE.slideCounter, w)}px`,
-          color: p.textMuted,
+          color: p.textBody,
           fontFamily: font_body,
           fontWeight: 600,
           zIndex: 5,
@@ -296,16 +271,12 @@ function layoutCentered(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT 2: LEFT ALIGNED ───────────────────────────────────
-// Editorial style. Everything left-aligned with generous padding.
-
+// ── LAYOUT 2: LEFT ALIGNED ──────────────────────────────────
 function layoutLeftAligned(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
-
   const content: (SatoriNode | string)[] = [];
 
-  // Category label
   if (input.subtitle) {
     content.push({
       type: 'span',
@@ -316,7 +287,6 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Title
   content.push({
     type: 'div',
     props: {
@@ -333,7 +303,6 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Accent line
   content.push({
     type: 'div',
     props: {
@@ -342,7 +311,6 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Body
   if (input.body_text) {
     content.push({
       type: 'div',
@@ -364,36 +332,23 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     type: 'div',
     props: {
       style: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        width: '100%',
-        height: '100%',
-        padding: `${s(80, w)}px ${s(70, w)}px`,
-        gap: `${s(8, w)}px`,
-        zIndex: 5,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center',
+        width: '100%', height: '100%', padding: `${s(80, w)}px ${s(70, w)}px`,
+        gap: `${s(8, w)}px`, zIndex: 5,
       },
       children: content,
     },
   });
 
-  // Bottom bar
   children.push({
     type: 'div',
     props: {
       style: {
-        position: 'absolute',
-        bottom: `${s(40, w)}px`,
-        left: `${s(70, w)}px`,
-        right: `${s(70, w)}px`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        zIndex: 5,
+        position: 'absolute', bottom: `${s(40, w)}px`, left: `${s(70, w)}px`, right: `${s(70, w)}px`,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 5,
       },
       children: [
-        { type: 'span', props: { style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textMuted, fontFamily: font_body }, children: input.brand_name } },
+        { type: 'span', props: { style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500 }, children: input.brand_name } },
         { type: 'span', props: { style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.accent, fontFamily: font_body, fontWeight: 600 }, children: `${input.slide_number}/${input.total_slides}` } },
       ],
     },
@@ -403,14 +358,11 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
 }
 
 // ── LAYOUT 3: BIG STAT ───────────────────────────────────────
-// Giant number centered, label below, source at bottom.
-
 function layoutBigStat(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
   const content: (SatoriNode | string)[] = [];
 
-  // Category
   if (input.subtitle) {
     content.push({
       type: 'span',
@@ -421,7 +373,6 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     });
   }
 
-  // The big number
   content.push({
     type: 'div',
     props: {
@@ -438,7 +389,6 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Stat label
   content.push({
     type: 'div',
     props: {
@@ -456,7 +406,6 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Accent line
   content.push({
     type: 'div',
     props: {
@@ -465,19 +414,22 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Source / attribution
+  // SOURCE / ATTRIBUTION — the explanatory text under the stat
+  // Nov 2025: bumped font 32→46, color textMuted→textBody, widened maxWidth.
+  // This was the worst legibility offender on the Fisiobárica deck.
   if (input.body_text && input.stat_label) {
     content.push({
       type: 'div',
       props: {
         style: {
           fontSize: `${s(TYPE.source, w)}px`,
-          color: p.textMuted,
+          color: p.textBody,
           fontFamily: font_body,
           textAlign: 'center',
-          lineHeight: 1.5,
-          maxWidth: `${s(680, w)}px`,
-          marginTop: `${s(22, w)}px`,
+          lineHeight: 1.45,
+          maxWidth: `${s(840, w)}px`,
+          marginTop: `${s(24, w)}px`,
+          fontWeight: 500,
         },
         children: input.body_text,
       },
@@ -495,18 +447,17 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Brand footer + counter
   children.push({
     type: 'div',
     props: {
-      style: { position: 'absolute', bottom: `${s(40, w)}px`, left: `${s(60, w)}px`, fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textMuted, fontFamily: font_body, zIndex: 5 },
+      style: { position: 'absolute', bottom: `${s(40, w)}px`, left: `${s(60, w)}px`, fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500, zIndex: 5 },
       children: input.brand_name,
     },
   });
   children.push({
     type: 'div',
     props: {
-      style: { position: 'absolute', top: `${s(40, w)}px`, right: `${s(40, w)}px`, fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textMuted, fontFamily: font_body, fontWeight: 600, zIndex: 5 },
+      style: { position: 'absolute', top: `${s(40, w)}px`, right: `${s(40, w)}px`, fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 600, zIndex: 5 },
       children: `${input.slide_number}/${input.total_slides}`,
     },
   });
@@ -514,25 +465,21 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT 4: SPLIT PANEL ────────────────────────────────────
-// Left color panel (35%) + right content (65%). Great for GMB promos.
-
+// ── LAYOUT 4: SPLIT PANEL ─────────────────────────────────
 function layoutSplitPanel(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
 
   const panelWidth = Math.round(w * 0.35);
   const panelChildren: (SatoriNode | string)[] = [];
 
-  // Slide counter in panel
   panelChildren.push({
     type: 'span',
     props: {
-      style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: withOpacity('#FFFFFF', 0.6), fontFamily: font_body, letterSpacing: '1px', fontWeight: 600 },
+      style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: withOpacity('#FFFFFF', 0.75), fontFamily: font_body, letterSpacing: '1px', fontWeight: 600 },
       children: `${input.slide_number}/${input.total_slides}`,
     },
   });
 
-  // Big element in panel (stat number, emoji, or first word of title)
   if (input.stat_number) {
     panelChildren.push({
       type: 'div',
@@ -545,7 +492,7 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
       panelChildren.push({
         type: 'div',
         props: {
-          style: { fontSize: `${s(TYPE.subtitleSmall, w)}px`, color: withOpacity('#FFFFFF', 0.8), fontFamily: font_body, marginTop: `${s(10, w)}px`, lineHeight: 1.35 },
+          style: { fontSize: `${s(TYPE.subtitleSmall, w)}px`, color: withOpacity('#FFFFFF', 0.9), fontFamily: font_body, marginTop: `${s(10, w)}px`, lineHeight: 1.35 },
           children: input.stat_label,
         },
       });
@@ -557,17 +504,16 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
     });
   }
 
-  // CTA button in panel
   panelChildren.push({
     type: 'div',
     props: {
       style: {
         marginTop: `${s(28, w)}px`,
         fontSize: `${s(TYPE.subtitleSmall, w)}px`,
-        color: p.accent,
+        color: '#FFFFFF',
         fontFamily: font_body,
         fontWeight: 600,
-        border: `2px solid ${p.accent}`,
+        border: `2px solid ${withOpacity('#FFFFFF', 0.7)}`,
         padding: `${s(12, w)}px ${s(24, w)}px`,
         borderRadius: `${s(6, w)}px`,
         textAlign: 'center',
@@ -576,7 +522,6 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Right content
   const rightChildren: (SatoriNode | string)[] = [];
 
   if (input.subtitle) {
@@ -616,7 +561,7 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
   rightChildren.push({
     type: 'span',
     props: {
-      style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textMuted, fontFamily: font_body, marginTop: 'auto' },
+      style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500, marginTop: 'auto' },
       children: input.brand_name,
     },
   });
@@ -653,24 +598,20 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
   };
 }
 
-// ── LAYOUT 5: QUOTE BLOCK ────────────────────────────────────
-// Large quote marks, italic text, attribution below.
-
+// ── LAYOUT 5: QUOTE BLOCK ──────────────────────────────────
 function layoutQuoteBlock(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
   const content: (SatoriNode | string)[] = [];
 
-  // Big opening quote mark
   content.push({
     type: 'div',
     props: {
-      style: { fontSize: `${s(TYPE.quoteMark, w)}px`, color: p.accent, fontFamily: font_heading, lineHeight: 0.6, opacity: 0.35 },
+      style: { fontSize: `${s(TYPE.quoteMark, w)}px`, color: p.accent, fontFamily: font_heading, lineHeight: 0.6, opacity: 0.45 },
       children: '\u201C',
     },
   });
 
-  // Quote text (the title field)
   content.push({
     type: 'div',
     props: {
@@ -684,7 +625,6 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Attribution
   const attribution = input.quote_attribution || input.subtitle;
   if (attribution) {
     content.push({
@@ -711,7 +651,6 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
     },
   });
 
-  // Bottom bar
   children.push({
     type: 'div',
     props: {
@@ -720,8 +659,8 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 5,
       },
       children: [
-        { type: 'span', props: { style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textMuted, fontFamily: font_body }, children: input.brand_name } },
-        { type: 'span', props: { style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textMuted, fontFamily: font_body, fontWeight: 600 }, children: `${input.slide_number}/${input.total_slides}` } },
+        { type: 'span', props: { style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500 }, children: input.brand_name } },
+        { type: 'span', props: { style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 600 }, children: `${input.slide_number}/${input.total_slides}` } },
       ],
     },
   });
@@ -729,15 +668,12 @@ function layoutQuoteBlock(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT 6: CTA FINAL ──────────────────────────────────────
-// Final slide: brand-focused CTA with optional logo.
-
+// ── LAYOUT 6: CTA FINAL ───────────────────────────────────
 function layoutCtaFinal(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
   const content: (SatoriNode | string)[] = [];
 
-  // Logo
   if (input.logo_url) {
     content.push({
       type: 'img',
@@ -748,7 +684,6 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
     });
   }
 
-  // Brand name (large)
   content.push({
     type: 'div',
     props: {
@@ -760,7 +695,6 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
     },
   });
 
-  // CTA text (title field)
   content.push({
     type: 'div',
     props: {
@@ -773,7 +707,6 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
     },
   });
 
-  // CTA button
   if (input.body_text) {
     content.push({
       type: 'div',
@@ -808,8 +741,7 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT DISPATCHER ────────────────────────────────────────
-
+// ── LAYOUT DISPATCHER ─────────────────────────────────────
 export function buildLayout(layout: LayoutName, input: LayoutInput): SatoriNode {
   switch (layout) {
     case 'centered':     return layoutCentered(input);

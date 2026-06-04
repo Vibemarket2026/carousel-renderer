@@ -1,11 +1,10 @@
 // /lib/decorations.ts
 // Decoration modules — leaf-node divs with display:flex (Satori requirement)
 //
-// SAFE ZONES (Nov 2025): all layouts place brand footer at bottom-left
-// (around bottom:40px left:60px) and slide counter at top-right
-// (around top:40px right:40px). Decorations MUST stay clear of these
-// zones to avoid the kind of overlap we hit on the Fisiobárica deck
-// where a corner_block sat behind the brand name.
+// SAFE ZONES: brand footer at bottom:40px left:60px; slide counter at
+// top:40px right:40px. Decorations stay clear of those zones.
+// Opacity floors raised so decorations stay visible on pastel/light moods
+// where decorationColor is already withOpacity(primary, 0.14).
 
 import { SatoriNode } from './types.js';
 
@@ -29,16 +28,13 @@ export function generateDecorations(
       return [];
 
     case 'accent_line':
-      // Vertical accent line on left edge (full height) + horizontal accent
-      // moved UP to the title zone (was at bottom 12% which is too close
-      // to the brand footer when footer text wraps).
       return [
         {
           type: 'div',
           props: {
             style: {
               position: 'absolute', top: '0', left: '0',
-              width: '5px', height: '100%',
+              width: '6px', height: '100%',
               background: `linear-gradient(to bottom, ${color}, ${colorSoft})`,
               zIndex: 3, display: 'flex',
             },
@@ -49,12 +45,11 @@ export function generateDecorations(
           props: {
             style: {
               position: 'absolute',
-              top: `${Math.round(height * 0.18)}px`,
+              top: `${Math.round(height * 0.2)}px`,
               right: `${Math.round(width * 0.06)}px`,
               width: `${Math.round(width * 0.1)}px`,
-              height: '3px',
+              height: '4px',
               backgroundColor: color,
-              opacity: 0.5,
               zIndex: 3, display: 'flex',
             },
           },
@@ -62,9 +57,6 @@ export function generateDecorations(
       ];
 
     case 'geometric_circles':
-      // Top-right large circle (partly off-canvas), top-left small accent,
-      // mid-right tiny dot. NO bottom-left circle (was clipping into the
-      // brand footer area on tall canvases).
       return [
         {
           type: 'div',
@@ -73,8 +65,8 @@ export function generateDecorations(
               position: 'absolute',
               top: `${Math.round(-height * 0.04)}px`,
               right: `${Math.round(-width * 0.04)}px`,
-              width: `${Math.round(width * 0.22)}px`,
-              height: `${Math.round(width * 0.22)}px`,
+              width: `${Math.round(width * 0.24)}px`,
+              height: `${Math.round(width * 0.24)}px`,
               borderRadius: '50%',
               backgroundColor: colorSoft,
               zIndex: 2, display: 'flex',
@@ -88,11 +80,10 @@ export function generateDecorations(
               position: 'absolute',
               top: `${Math.round(height * 0.32)}px`,
               left: `${Math.round(-width * 0.06)}px`,
-              width: `${Math.round(width * 0.14)}px`,
-              height: `${Math.round(width * 0.14)}px`,
+              width: `${Math.round(width * 0.15)}px`,
+              height: `${Math.round(width * 0.15)}px`,
               borderRadius: '50%',
               backgroundColor: color,
-              opacity: 0.14,
               zIndex: 2, display: 'flex',
             },
           },
@@ -102,13 +93,12 @@ export function generateDecorations(
           props: {
             style: {
               position: 'absolute',
-              top: `${Math.round(height * 0.6)}px`,
+              top: `${Math.round(height * 0.62)}px`,
               right: `${Math.round(width * 0.1)}px`,
-              width: `${Math.round(width * 0.05)}px`,
-              height: `${Math.round(width * 0.05)}px`,
+              width: `${Math.round(width * 0.06)}px`,
+              height: `${Math.round(width * 0.06)}px`,
               borderRadius: '50%',
               backgroundColor: color,
-              opacity: 0.1,
               zIndex: 2, display: 'flex',
             },
           },
@@ -116,40 +106,33 @@ export function generateDecorations(
       ];
 
     case 'corner_block':
-      // REDESIGNED: previous version had a solid block at bottom:0 left:0
-      // that sat directly behind the brand-name footer (e.g. Fisiobárica
-      // Wellness deck). All elements now live in the TOP half of the canvas
-      // and on the RIGHT edge, never within ~18% of the bottom-left corner.
+      // All elements in TOP half + RIGHT edge. Never near bottom-left
+      // (that zone is reserved for the brand footer).
       return [
-        // Top-right horizontal block (sits ABOVE the slide counter row, which
-        // is at top:40px right:40px with ~38px font height = clear of 70px+)
         {
           type: 'div',
           props: {
             style: {
               position: 'absolute', top: '0', right: '0',
-              width: `${Math.round(width * 0.28)}px`,
-              height: `${Math.round(height * 0.018)}px`,
+              width: `${Math.round(width * 0.3)}px`,
+              height: `${Math.round(height * 0.022)}px`,
               backgroundColor: color,
-              opacity: 0.35,
               zIndex: 2, display: 'flex',
             },
           },
         },
-        // Top-left compact accent (replaces the old bottom-left block)
         {
           type: 'div',
           props: {
             style: {
               position: 'absolute', top: '0', left: '0',
-              width: `${Math.round(width * 0.12)}px`,
-              height: `${Math.round(height * 0.04)}px`,
+              width: `${Math.round(width * 0.14)}px`,
+              height: `${Math.round(height * 0.045)}px`,
               backgroundColor: colorSoft,
               zIndex: 2, display: 'flex',
             },
           },
         },
-        // Right-edge vertical accent (mid-canvas)
         {
           type: 'div',
           props: {
@@ -157,10 +140,9 @@ export function generateDecorations(
               position: 'absolute',
               top: `${Math.round(height * 0.18)}px`,
               right: '0',
-              width: '4px',
+              width: '5px',
               height: `${Math.round(height * 0.32)}px`,
               backgroundColor: color,
-              opacity: 0.28,
               zIndex: 2, display: 'flex',
             },
           },
@@ -168,11 +150,12 @@ export function generateDecorations(
       ];
 
     case 'dot_pattern': {
-      // Dot grid stays in the top-right quadrant, well clear of footer.
+      // Dot grid in top-right quadrant. Bigger dots + no opacity multiplier
+      // (decorationColor already has appropriate alpha baked in for each mood).
       const dots: SatoriNode[] = [];
-      const dotSize = Math.max(4, Math.round(width * 0.006));
-      const spacing = Math.round(width * 0.06);
-      const offsetX = Math.round(width * 0.65);
+      const dotSize = Math.max(6, Math.round(width * 0.009));
+      const spacing = Math.round(width * 0.055);
+      const offsetX = Math.round(width * 0.62);
       const offsetY = Math.round(height * 0.05);
 
       for (let row = 0; row < 8; row++) {
@@ -188,7 +171,6 @@ export function generateDecorations(
                 height: `${dotSize}px`,
                 borderRadius: '50%',
                 backgroundColor: color,
-                opacity: 0.2,
                 zIndex: 2, display: 'flex',
               },
             },
