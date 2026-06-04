@@ -3,7 +3,7 @@
 // This is the brain of the render engine
 
 import { SatoriNode, MoodName, LayoutName, DecorationType, RenderSlideRequest } from './types.js';
-import { derivePalette, DerivedPalette } from './contrast.js';
+import { derivePalette, DerivedPalette, lighten, darken } from './contrast.js';
 import { buildLayout } from './layouts.js';
 import { generateDecorations } from './decorations.js';
 
@@ -21,29 +21,52 @@ function moodToPaletteType(mood: MoodName): 'dark' | 'light' | 'bold' | 'pastel'
 }
 
 // ── Mood → Background Style ──────────────────────────────────
-// Each mood applies a distinct background treatment to the container
+// Each mood applies a distinct background treatment to the container.
+// Nov 2025: replaced flat backgroundColor with subtle gradients/radials
+// on each mood so slides have visual texture without breaking the design
+// system. All gradients stay within the mood's own palette so contrast
+// guarantees from derivePalette() still hold.
 
 function moodBackground(mood: MoodName, palette: DerivedPalette): Record<string, any> {
   switch (mood) {
     case 'dark_minimal':
-      return { backgroundColor: palette.bgMain };
+      // Subtle radial highlight from top-center — adds depth without
+      // breaking the minimal feel. Stays within the dark palette range.
+      return {
+        background: `radial-gradient(ellipse at 50% 0%, ${lighten(palette.bgMain, 0.04)} 0%, ${palette.bgMain} 55%, ${darken(palette.bgMain, 0.04)} 100%)`,
+      };
 
     case 'light_clean':
-      return { backgroundColor: palette.bgMain };
+      // Gentle vertical wash from main bg → slightly cooler tone at bottom.
+      // Stays clean and editorial.
+      return {
+        background: `linear-gradient(180deg, ${palette.bgMain} 0%, #F2F2EE 100%)`,
+      };
 
     case 'bold_primary':
-      return { backgroundColor: palette.bgMain };
+      // Diagonal sweep within the brand color — top-left slightly lighter,
+      // bottom-right slightly deeper. Gives flat brand color real depth.
+      return {
+        background: `linear-gradient(135deg, ${lighten(palette.bgMain, 0.05)} 0%, ${palette.bgMain} 55%, ${darken(palette.bgMain, 0.08)} 100%)`,
+      };
 
     case 'soft_pastel':
-      return { backgroundColor: palette.bgMain };
+      // Diagonal blend between the two pastel tones — adds dimension to
+      // what was previously a flat pastel wash.
+      return {
+        background: `linear-gradient(160deg, ${palette.bgMain} 0%, ${palette.bgPanel} 100%)`,
+      };
 
     case 'color_block':
-      // Split panel handles its own bg via layout
+      // Split-panel layout owns its bg, but we still set bgMain so the
+      // right-content area renders correctly when the layout reads it.
       return { backgroundColor: palette.bgMain };
 
     case 'warm_gradient':
+      // Already a gradient — keep but use a richer 3-stop path through
+      // the brand colors for more visual interest.
       return {
-        background: `linear-gradient(145deg, ${palette.gradientFrom} 0%, ${palette.gradientTo} 100%)`,
+        background: `linear-gradient(145deg, ${palette.gradientFrom} 0%, ${darken(palette.gradientTo, 0.05)} 55%, ${palette.gradientTo} 100%)`,
       };
   }
 }

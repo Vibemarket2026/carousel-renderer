@@ -201,7 +201,9 @@ export function accentColorOnBg(bgHex: string, brandSecondary: string): string {
 
 // ── Derive Full Palette From 2 Brand Colors ──────────────────
 // This is the key function: given any pair of brand colors,
-// produce a safe, harmonious palette for any mood
+// produce a safe, harmonious palette for any mood.
+// Contrast levels boosted (Nov 2025) so secondary text (body, footers,
+// stat sources) stays readable in IG mobile feed at ~470px.
 
 export interface DerivedPalette {
   bgMain: string;
@@ -229,12 +231,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: darken(primary, 0.3),
         textTitle: '#FFFFFF',
-        textBody: withOpacity('#FFFFFF', 0.7),
-        textMuted: withOpacity('#FFFFFF', 0.4),
+        textBody: withOpacity('#FFFFFF', 0.88),   // was 0.7
+        textMuted: withOpacity('#FFFFFF', 0.65),  // was 0.4
         accent: accentColorOnBg(bg, secondary),
-        accentSoft: withOpacity(secondary, 0.15),
-        decorationColor: withOpacity(secondary, 0.2),
-        decorationSoft: withOpacity(primary, 0.15),
+        accentSoft: withOpacity(secondary, 0.18),
+        decorationColor: withOpacity(secondary, 0.22),
+        decorationSoft: withOpacity(primary, 0.18),
         gradientFrom: darken(primary, 0.38),
         gradientTo: darken(secondary, 0.3),
       };
@@ -245,8 +247,8 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: primary,
         textTitle: textColorOnBg(bg, primary),
-        textBody: '#555555',
-        textMuted: '#999999',
+        textBody: '#3A3A3A',   // was '#555555'
+        textMuted: '#6B6B6B',  // was '#999999'
         accent: accentColorOnBg(bg, primary),
         accentSoft: lighten(primary, 0.3),
         decorationColor: primary,
@@ -256,16 +258,17 @@ export function derivePalette(
       };
     }
     case 'bold': {
+      const title = textColorOnBg(primary);
       return {
         bgMain: primary,
         bgPanel: darken(primary, 0.1),
-        textTitle: textColorOnBg(primary),
-        textBody: subtitleColorOnBg(primary),
-        textMuted: withOpacity(textColorOnBg(primary), 0.4),
+        textTitle: title,
+        textBody: withOpacity(title, 0.88),   // was subtitleColorOnBg(primary) ~0.7
+        textMuted: withOpacity(title, 0.68),  // was 0.4
         accent: accentColorOnBg(primary, secondary),
-        accentSoft: withOpacity(secondary, 0.2),
-        decorationColor: withOpacity(secondary, 0.25),
-        decorationSoft: withOpacity('#000000', 0.1),
+        accentSoft: withOpacity(secondary, 0.22),
+        decorationColor: withOpacity(secondary, 0.28),
+        decorationSoft: withOpacity(title === '#FFFFFF' ? '#000000' : '#FFFFFF', 0.12),
         gradientFrom: primary,
         gradientTo: darken(primary, 0.15),
       };
@@ -276,12 +279,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: toPastel(secondary),
         textTitle: toPastelDark(primary),
-        textBody: toPastelMid(primary),
-        textMuted: lighten(toPastelMid(primary), 0.15),
-        accent: setLightness(primary, 0.35),
+        textBody: setLightness(primary, 0.28),   // was toPastelMid (~0.4) → push darker
+        textMuted: setLightness(primary, 0.42),  // was lighten(toPastelMid, 0.15) → stays readable
+        accent: setLightness(primary, 0.32),
         accentSoft: withOpacity(primary, 0.15),
-        decorationColor: withOpacity(primary, 0.12),
-        decorationSoft: withOpacity(secondary, 0.08),
+        decorationColor: withOpacity(primary, 0.14),
+        decorationSoft: withOpacity(secondary, 0.10),
         gradientFrom: bg,
         gradientTo: toPastel(secondary),
       };
@@ -292,8 +295,8 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: primary,
         textTitle: textColorOnBg(bg, primary),
-        textBody: '#666666',
-        textMuted: '#AAAAAA',
+        textBody: '#4A4A4A',   // was '#666666'
+        textMuted: '#7A7A7A',  // was '#AAAAAA'
         accent: accentColorOnBg(bg, primary),
         accentSoft: lighten(primary, 0.35),
         decorationColor: secondary,
@@ -308,12 +311,12 @@ export function derivePalette(
         bgMain: bg,
         bgPanel: darken(secondary, 0.2),
         textTitle: '#FFFFFF',
-        textBody: withOpacity('#FFFFFF', 0.65),
-        textMuted: withOpacity('#FFFFFF', 0.35),
+        textBody: withOpacity('#FFFFFF', 0.85),   // was 0.65
+        textMuted: withOpacity('#FFFFFF', 0.62),  // was 0.35
         accent: accentColorOnBg(bg, secondary),
-        accentSoft: withOpacity(secondary, 0.12),
-        decorationColor: withOpacity(secondary, 0.15),
-        decorationSoft: withOpacity(primary, 0.2),
+        accentSoft: withOpacity(secondary, 0.15),
+        decorationColor: withOpacity(secondary, 0.18),
+        decorationSoft: withOpacity(primary, 0.22),
         gradientFrom: darken(primary, 0.32),
         gradientTo: darken(secondary, 0.15),
       };
