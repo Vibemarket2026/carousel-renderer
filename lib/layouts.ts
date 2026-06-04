@@ -2,6 +2,13 @@
 // 6 layout modules using pure flexbox - zero fixed coordinates
 // Each layout adapts to any text length via flex properties
 // The palette comes from contrast.ts derivePalette()
+//
+// FOOTER CONVENTION (Nov 2025 revision):
+//   - Brand name: always bottom-left  (bottom: 40px, left: 60-70px)
+//   - Slide counter: always bottom-right (bottom: 40px, right: 60-70px)
+// Previously big_stat and centered placed the counter at top-right, which
+// was inconsistent with left_aligned/quote_block AND collided with
+// top-aligned decorations (geometric_circles top-right arc).
 
 import { SatoriNode, LayoutName } from './types.js';
 import { DerivedPalette, withOpacity } from './contrast.js';
@@ -26,17 +33,12 @@ interface LayoutInput {
   palette: DerivedPalette;
   width: number;
   height: number;
-  mood?: string;  // Optional — enables per-mood type scaling
+  mood?: string;
 }
 
-// ── Scale helper: all sizes proportional to canvas ───────────
 function s(base: number, width: number): number {
   return Math.round(base * (width / 1080));
 }
-
-// ── TYPOGRAPHIC TOKENS ────────────────────────────────────────
-// Base sizes in px assuming a 1080px-wide canvas. All are Instagram-first:
-// sized so they remain legible when IG re-scales the post to ~470px on mobile.
 
 const TYPE = {
   titleCover:     120,
@@ -56,11 +58,9 @@ const TYPE = {
   swipeCta:        40,
   ctaButton:       46,
 
-  // Footers & meta (Nov 2025: bumped — these were the worst legibility offenders
-  // on mobile feed at ~470px width)
-  brandFooter:     40,  // was 34
-  slideCounter:    40,  // was 36
-  source:          46,  // was 32 — fix for big_stat explanatory text being tiny
+  brandFooter:     40,
+  slideCounter:    40,
+  source:          46,
 
   statNumber:     260,
   statNumberPanel: 120,
@@ -73,7 +73,6 @@ const TYPE = {
   accentLineH:      6,
 };
 
-// ── Mood typography multipliers ─────────────────────────────
 function moodTypeScale(mood?: string): { title: number; stat: number; body: number } {
   switch (mood) {
     case 'bold_primary':
@@ -100,6 +99,56 @@ function t(
   const base = TYPE[token];
   const mult = moodTypeScale(mood)[kind];
   return s(Math.round(base * mult), width);
+}
+
+// ── Shared footer helper ───────────────────────────────────
+// Returns the brand name (bottom-left) and slide counter (bottom-right)
+// as two absolute-positioned siblings. Used by centered + big_stat to
+// guarantee consistency with the bottom-bar layouts.
+
+function footerElements(
+  input: LayoutInput,
+  p: DerivedPalette,
+  w: number,
+  showCounter: boolean
+): SatoriNode[] {
+  const out: SatoriNode[] = [
+    {
+      type: 'div',
+      props: {
+        style: {
+          position: 'absolute',
+          bottom: `${s(40, w)}px`,
+          left: `${s(60, w)}px`,
+          fontSize: `${s(TYPE.brandFooter, w)}px`,
+          color: p.textBody,
+          fontFamily: input.font_body,
+          fontWeight: 500,
+          zIndex: 5,
+        },
+        children: input.brand_name,
+      },
+    },
+  ];
+  if (showCounter) {
+    out.push({
+      type: 'div',
+      props: {
+        style: {
+          position: 'absolute',
+          bottom: `${s(40, w)}px`,
+          right: `${s(60, w)}px`,
+          fontSize: `${s(TYPE.slideCounter, w)}px`,
+          color: p.textBody,
+          fontFamily: input.font_body,
+          fontWeight: 600,
+          zIndex: 5,
+        },
+        children: `${input.slide_number}/${input.total_slides}`,
+      },
+    });
+  }
+  return out;
 }
 
 // ── LAYOUT 1: CENTERED ──────────────────────────────────────
@@ -232,41 +281,9 @@ function layoutCentered(input: LayoutInput): SatoriNode {
     },
   });
 
-  children.push({
-    type: 'div',
-    props: {
-      style: {
-        position: 'absolute',
-        bottom: `${s(40, w)}px`,
-        left: `${s(60, w)}px`,
-        fontSize: `${s(TYPE.brandFooter, w)}px`,
-        color: p.textBody,
-        fontFamily: font_body,
-        fontWeight: 500,
-        zIndex: 5,
-      },
-      children: input.brand_name,
-    },
-  });
-
-  if (input.slide_type === 'content' || input.slide_type === 'big_stat') {
-    children.push({
-      type: 'div',
-      props: {
-        style: {
-          position: 'absolute',
-          top: `${s(40, w)}px`,
-          right: `${s(40, w)}px`,
-          fontSize: `${s(TYPE.slideCounter, w)}px`,
-          color: p.textBody,
-          fontFamily: font_body,
-          fontWeight: 600,
-          zIndex: 5,
-        },
-        children: `${input.slide_number}/${input.total_slides}`,
-      },
-    });
-  }
+  // Footer: brand bottom-left, counter bottom-right (only on content/big_stat).
+  const showCounter = input.slide_type === 'content' || input.slide_type === 'big_stat';
+  children.push(...footerElements(input, p, w, showCounter));
 
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
@@ -340,6 +357,7 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
     },
   });
 
+  // Bottom bar: brand left, counter right.
   children.push({
     type: 'div',
     props: {
@@ -349,7 +367,7 @@ function layoutLeftAligned(input: LayoutInput): SatoriNode {
       },
       children: [
         { type: 'span', props: { style: { fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500 }, children: input.brand_name } },
-        { type: 'span', props: { style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.accent, fontFamily: font_body, fontWeight: 600 }, children: `${input.slide_number}/${input.total_slides}` } },
+        { type: 'span', props: { style: { fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 600 }, children: `${input.slide_number}/${input.total_slides}` } },
       ],
     },
   });
@@ -414,9 +432,6 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  // SOURCE / ATTRIBUTION — the explanatory text under the stat
-  // Nov 2025: bumped font 32→46, color textMuted→textBody, widened maxWidth.
-  // This was the worst legibility offender on the Fisiobárica deck.
   if (input.body_text && input.stat_label) {
     content.push({
       type: 'div',
@@ -447,20 +462,10 @@ function layoutBigStat(input: LayoutInput): SatoriNode {
     },
   });
 
-  children.push({
-    type: 'div',
-    props: {
-      style: { position: 'absolute', bottom: `${s(40, w)}px`, left: `${s(60, w)}px`, fontSize: `${s(TYPE.brandFooter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 500, zIndex: 5 },
-      children: input.brand_name,
-    },
-  });
-  children.push({
-    type: 'div',
-    props: {
-      style: { position: 'absolute', top: `${s(40, w)}px`, right: `${s(40, w)}px`, fontSize: `${s(TYPE.slideCounter, w)}px`, color: p.textBody, fontFamily: font_body, fontWeight: 600, zIndex: 5 },
-      children: `${input.slide_number}/${input.total_slides}`,
-    },
-  });
+  // Footer: brand bottom-left, counter bottom-right (previously the counter
+  // sat at top-right, which broke consistency and collided with the
+  // top-right decoration arc in geometric_circles / corner_block / dots).
+  children.push(...footerElements(input, p, w, true));
 
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
@@ -598,7 +603,7 @@ function layoutSplitPanel(input: LayoutInput): SatoriNode {
   };
 }
 
-// ── LAYOUT 5: QUOTE BLOCK ──────────────────────────────────
+// ── LAYOUT 5: QUOTE BLOCK ─────────────────────────────────
 function layoutQuoteBlock(input: LayoutInput): SatoriNode {
   const { palette: p, width: w, height: h, font_heading, font_body, mood } = input;
   const children: (SatoriNode | string)[] = [];
@@ -741,7 +746,6 @@ function layoutCtaFinal(input: LayoutInput): SatoriNode {
   return { type: 'div', props: { style: { width: `${w}px`, height: `${h}px`, display: 'flex', position: 'relative', overflow: 'hidden' }, children } };
 }
 
-// ── LAYOUT DISPATCHER ─────────────────────────────────────
 export function buildLayout(layout: LayoutName, input: LayoutInput): SatoriNode {
   switch (layout) {
     case 'centered':     return layoutCentered(input);
