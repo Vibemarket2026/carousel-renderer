@@ -1,6 +1,11 @@
 // /api/render-slide.ts
-// Vibemarket Render Engine v2.1 - API Endpoint
+// Vibemarket Render Engine v2.2 - API Endpoint
 // POST /api/render-slide → returns PNG base64 + Fabric.js JSON for editor
+//
+// v2.2: optional recipe (template-grammar) engine. When the request carries a
+// `recipe` field, we build the slide with lib/recipes/* (loaded lazily so the
+// legacy path never touches that code). Without `recipe`, behaviour is byte-for-
+// byte the same mood/layout/decoration path as before.
 
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
@@ -136,19 +141,40 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // ── Compose the slide ──────────────────────────────────
-    const slideNode = composeSlide(
-      { ...body, mood, layout, decoration, brand },
-      assetImageData
-    );
+    // ── Build slide node + fonts ───────────────────────────────
+    // Recipe engine (template grammar) when `recipe` is present; otherwise the
+    // legacy mood/layout/decoration path, untouched.
+    let slideNode: any;
+    let fonts: any;
+    let renderWidth = width;
+    let renderHeight = height;
+    let designIntent: any;
+    let fabricData: any = [];
 
-    // ── Load fonts ─────────────────────────────────────────
-    const fonts = await loadFonts(brand.font_heading, brand.font_body);
+    const recipeKey = (body as any).recipe;
+
+    if (recipeKey) {
+      const { buildRecipeSlide } = await import('../lib/recipes/engine.js');
+      const { loadRecipeFonts } = await import('../lib/recipes/fonts.js');
+      const built = buildRecipeSlide({ ...body, brand, asset_url: assetImageData || body.asset_url });
+      slideNode = built.node;
+      renderWidth = built.width;
+      renderHeight = built.height;
+      fonts = await loadRecipeFonts(built.fontFamilies);
+      designIntent = { recipe: built.recipe, template: built.template };
+    } else {
+      slideNode = composeSlide(
+        { ...body, mood, layout, decoration, brand },
+        assetImageData
+      );
+      fonts = await loadFonts(brand.font_heading, brand.font_body);
+      designIntent = { mood, layout, decoration };
+    }
 
     // ── Render with Satori → SVG (with emoji support) ───────────────────
     const svg = await satori(slideNode as any, {
-      width,
-      height,
+      width: renderWidth,
+      height: renderHeight,
       fonts,
       // When Satori encounters an emoji it can't render with the loaded
       // fonts, it calls this with code='emoji' and segment=<emoji string>.
@@ -165,21 +191,23 @@ export default async function handler(req: any, res: any) {
 
     // ── Convert SVG → PNG ────────────────────────────────────
     const resvg = new Resvg(svg, {
-      fitTo: { mode: 'width', value: width },
+      fitTo: { mode: 'width', value: renderWidth },
     });
     const pngData = resvg.render();
     const pngBuffer = pngData.asPng();
 
-    // ── Convert SVG → Fabric.js JSON for editor ──────────────────────
-    const fabricData = convertSlideToFabric(svg, {
-      slide_number: slideNumber,
-      slide_type: slideType,
-      mood,
-      width,
-      height,
-      primary: brand.color_primary,
-      secondary: brand.color_secondary,
-    });
+    // ── Convert SVG → Fabric.js JSON for editor (legacy path only) ──────
+    if (!recipeKey) {
+      fabricData = convertSlideToFabric(svg, {
+        slide_number: slideNumber,
+        slide_type: slideType,
+        mood,
+        width: renderWidth,
+        height: renderHeight,
+        primary: brand.color_primary,
+        secondary: brand.color_secondary,
+      });
+    }
 
     const renderTime = Date.now() - startTime;
 
@@ -187,8 +215,8 @@ export default async function handler(req: any, res: any) {
       success: true,
       image_base64: pngBuffer.toString('base64'),
       design_elements: fabricData,
-      design_intent: { mood, layout, decoration },
-      dimensions: { width, height },
+      design_intent: designIntent,
+      dimensions: { width: renderWidth, height: renderHeight },
       render_time_ms: renderTime,
     });
 
