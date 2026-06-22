@@ -7,8 +7,10 @@
 // Vercel instances reuse them). Same spirit as the Twemoji fetch in render-slide.ts.
 //
 // We force STATIC TTF (Satori 0.10 in this repo expects TrueType/OpenType, not
-// woff2) by sending an old Android User-Agent — the same trick google-webfonts-helper
-// uses. Inter (already committed in /fonts/) is always added as a guaranteed fallback.
+// woff2) by sending an old Android User-Agent. With that UA the CSS comes back as
+// plain @font-face blocks (one per weight/style, no /* subset */ comments and no
+// unicode-range), so we parse every block that carries a .ttf url. Inter (already
+// committed in /fonts/) is always added as a guaranteed fallback.
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -38,7 +40,7 @@ export const RECIPE_FONT_SPECS: Record<string, FamilySpec> = {
   'Jost': { weights: [400, 500, 600] },
 };
 
-// Old Android UA → Google Fonts serves static .ttf (no woff/woff2 support assumed).
+// Old Android UA -> Google Fonts serves static .ttf (no woff/woff2 support assumed).
 const TTF_UA =
   'Mozilla/5.0 (Linux; U; Android 2.3.6; en-us; Nexus S Build/GRK39F) ' +
   'AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1';
@@ -77,20 +79,22 @@ async function fetchFamily(family: string): Promise<SatoriFont[]> {
     if (!cssRes.ok) { familyCache.set(family, []); return []; }
     const css = await cssRes.text();
 
-    // Each @font-face block is preceded by a /* subset */ comment. Keep only latin.
-    const blockRe = /\/\*\s*([\w-]+)\s*\*\/\s*@font-face\s*\{([^}]+)\}/g;
+    // With the old-Android UA, Google Fonts returns plain TTF @font-face blocks:
+    // one per weight/style, with NO /* subset */ comment and NO unicode-range.
+    // Parse every @font-face that carries a .ttf url; key on weight+style to dedupe.
+    // (The previous parser required a /* subset */ comment, which this format lacks,
+    //  so it matched nothing and every recipe fell back to Inter.)
+    const faceRe = /@font-face\s*\{([^}]+)\}/g;
     const seen = new Set<string>();
     const jobs: Promise<void>[] = [];
     let m: RegExpExecArray | null;
-    while ((m = blockRe.exec(css)) !== null) {
-      const subset = m[1];
-      const body = m[2];
-      if (subset !== 'latin') continue;
+    while ((m = faceRe.exec(css)) !== null) {
+      const body = m[1];
+      const uM = body.match(/url\((https:\/\/[^)]+\.ttf)\)/);
+      if (!uM) continue;
       const wM = body.match(/font-weight:\s*(\d+)/);
       const sM = body.match(/font-style:\s*(\w+)/);
-      const uM = body.match(/url\((https:\/\/[^)]+\.ttf)\)/);
-      if (!wM || !uM) continue;
-      const weight = parseInt(wM[1], 10);
+      const weight = wM ? parseInt(wM[1], 10) : 400;
       const style: 'normal' | 'italic' = sM && sM[1] === 'italic' ? 'italic' : 'normal';
       const key = weight + '-' + style;
       if (seen.has(key)) continue;
