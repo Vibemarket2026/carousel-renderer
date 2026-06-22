@@ -3,10 +3,10 @@
 // skeleton (template) per slide and supplies content; this builds the Satori
 // node deterministically. Brand-agnostic: the palette comes from tokens.ts.
 //
-// STAGED: this first cut ships the two recipes whose code is fully validated
-// (Bold Promo, Studio Lux) to prove the end-to-end pipeline (runtime fonts +
-// Satori 0.10). The other five (Clinical Editorial, Data Story, Soft Wellness,
-// Mono Premium, Noir) land in a follow-up commit once a preview render is OK.
+// All 7 recipes: Clinical Editorial, Data Story, Soft Wellness, Mono Premium,
+// Noir, Bold Promo, Studio Lux. Bold Promo & Studio Lux are the originally
+// validated cuts; the other five are reconstructed from the validated spec and
+// should be fine-tuned against a preview render.
 //
 // Node format is the plain JSX-object shape Satori accepts: { type, props }.
 
@@ -27,10 +27,73 @@ const col = (style: AnyObj, children?: any): AnyObj => div({ flexDirection: 'col
 const row = (style: AnyObj, children?: any): AnyObj => div({ flexDirection: 'row', ...style }, children);
 
 // ── Recipes (art directions) ────────────────────────────────
-// variant + font roles (display/body/mono -> family names) + shape (radii) +
-// optional ink policy + full type scale (per role: font role, size, line-height,
-// weight, letter-spacing, uppercase, italic).
 export const RECIPES: AnyObj = {
+  clinical_editorial: {
+    variant: 'light', display: 'Newsreader', body: 'Hanken Grotesk', mono: 'Hanken Grotesk', buttonRadius: 6, cardRadius: 18,
+    type: {
+      display: { f: 'display', size: 130, lh: 1.04, w: 600 }, h1: { f: 'display', size: 92, lh: 1.08, w: 600 },
+      lead: { f: 'body', size: 41, lh: 1.4, w: 500 }, body: { f: 'body', size: 39, lh: 1.5, w: 400 },
+      eyebrow: { f: 'body', size: 25, lh: 1.2, w: 600, ls: 3, up: true },
+      index: { f: 'display', size: 224, lh: 1.0, w: 600 }, stat: { f: 'display', size: 320, lh: 0.96, w: 600 },
+      statLabel: { f: 'body', size: 42, lh: 1.3, w: 500 }, quote: { f: 'display', size: 76, lh: 1.2, w: 500, italic: true },
+      attribution: { f: 'body', size: 27, lh: 1.3, w: 600 }, cta: { f: 'display', size: 92, lh: 1.06, w: 600 },
+      button: { f: 'body', size: 30, lh: 1, w: 600 }, footer: { f: 'body', size: 22, lh: 1, w: 500, ls: 1 },
+      statBig: { f: 'display', size: 100, lh: 1.05, w: 600 }, smallLabel: { f: 'body', size: 25, lh: 1.3, w: 500 },
+    },
+  },
+  data_story: {
+    variant: 'light', display: 'Archivo', body: 'Archivo', mono: 'IBM Plex Mono', buttonRadius: 4, cardRadius: 10,
+    type: {
+      display: { f: 'display', size: 120, lh: 1.04, w: 800 }, h1: { f: 'display', size: 84, lh: 1.08, w: 800 },
+      lead: { f: 'body', size: 38, lh: 1.4, w: 500 }, body: { f: 'body', size: 37, lh: 1.46, w: 400 },
+      eyebrow: { f: 'mono', size: 24, lh: 1.2, w: 500, ls: 2, up: true },
+      index: { f: 'display', size: 220, lh: 1.0, w: 800 }, stat: { f: 'display', size: 320, lh: 0.94, w: 800 },
+      statLabel: { f: 'mono', size: 30, lh: 1.3, w: 400 }, quote: { f: 'display', size: 72, lh: 1.1, w: 700 },
+      attribution: { f: 'mono', size: 24, lh: 1.3, w: 400 }, cta: { f: 'display', size: 96, lh: 1.02, w: 800 },
+      button: { f: 'body', size: 31, lh: 1, w: 700 }, footer: { f: 'mono', size: 21, lh: 1, w: 400, ls: 1 },
+      statBig: { f: 'display', size: 96, lh: 1.0, w: 800 }, smallLabel: { f: 'mono', size: 24, lh: 1.3, w: 400 },
+    },
+  },
+  soft_wellness: {
+    variant: 'light', display: 'DM Serif Display', body: 'Mulish', mono: 'Mulish', buttonRadius: 999, cardRadius: 40,
+    type: {
+      display: { f: 'display', size: 124, lh: 1.06, w: 400 }, h1: { f: 'display', size: 88, lh: 1.1, w: 400 },
+      lead: { f: 'body', size: 39, lh: 1.44, w: 500 }, body: { f: 'body', size: 37, lh: 1.5, w: 400 },
+      eyebrow: { f: 'body', size: 25, lh: 1.2, w: 700, ls: 3, up: true },
+      index: { f: 'display', size: 220, lh: 1.0, w: 400 }, stat: { f: 'display', size: 300, lh: 1.0, w: 400 },
+      statLabel: { f: 'body', size: 40, lh: 1.3, w: 500 }, quote: { f: 'display', size: 76, lh: 1.16, w: 400, italic: true },
+      attribution: { f: 'body', size: 27, lh: 1.3, w: 600 }, cta: { f: 'display', size: 92, lh: 1.06, w: 400 },
+      button: { f: 'body', size: 30, lh: 1, w: 700 }, footer: { f: 'body', size: 22, lh: 1, w: 600, ls: 1 },
+      statBig: { f: 'display', size: 96, lh: 1.04, w: 400 }, smallLabel: { f: 'body', size: 25, lh: 1.3, w: 600 },
+    },
+  },
+  mono_premium: {
+    variant: 'light', display: 'Space Grotesk', body: 'Space Grotesk', mono: 'Space Grotesk', buttonRadius: 0, cardRadius: 6,
+    ink: { eyebrow: 'textMuted', index: 'textTitle', statBig: 'textTitle', quoteMark: 'border' },
+    type: {
+      display: { f: 'display', size: 128, lh: 1.04, w: 600 }, h1: { f: 'display', size: 90, lh: 1.08, w: 600 },
+      lead: { f: 'body', size: 38, lh: 1.4, w: 500 }, body: { f: 'body', size: 37, lh: 1.48, w: 400 },
+      eyebrow: { f: 'body', size: 24, lh: 1.2, w: 600, ls: 4, up: true },
+      index: { f: 'display', size: 224, lh: 1.0, w: 600 }, stat: { f: 'display', size: 320, lh: 0.96, w: 600 },
+      statLabel: { f: 'body', size: 40, lh: 1.3, w: 500 }, quote: { f: 'display', size: 76, lh: 1.16, w: 500 },
+      attribution: { f: 'body', size: 26, lh: 1.3, w: 500 }, cta: { f: 'display', size: 92, lh: 1.04, w: 600 },
+      button: { f: 'body', size: 30, lh: 1, w: 600, ls: 1 }, footer: { f: 'body', size: 22, lh: 1, w: 500, ls: 1 },
+      statBig: { f: 'display', size: 96, lh: 1.04, w: 600 }, smallLabel: { f: 'body', size: 24, lh: 1.3, w: 500 },
+    },
+  },
+  noir: {
+    variant: 'dark', display: 'Playfair Display', body: 'Manrope', mono: 'Manrope', buttonRadius: 4, cardRadius: 12,
+    type: {
+      display: { f: 'display', size: 128, lh: 1.05, w: 600 }, h1: { f: 'display', size: 90, lh: 1.1, w: 600 },
+      lead: { f: 'body', size: 38, lh: 1.4, w: 500 }, body: { f: 'body', size: 37, lh: 1.48, w: 400 },
+      eyebrow: { f: 'body', size: 24, lh: 1.2, w: 600, ls: 4, up: true },
+      index: { f: 'display', size: 220, lh: 1.0, w: 600 }, stat: { f: 'display', size: 310, lh: 0.98, w: 600 },
+      statLabel: { f: 'body', size: 40, lh: 1.3, w: 500 }, quote: { f: 'display', size: 78, lh: 1.18, w: 500, italic: true },
+      attribution: { f: 'body', size: 26, lh: 1.3, w: 600 }, cta: { f: 'display', size: 92, lh: 1.06, w: 600 },
+      button: { f: 'body', size: 30, lh: 1, w: 600 }, footer: { f: 'body', size: 22, lh: 1, w: 500, ls: 1 },
+      statBig: { f: 'display', size: 88, lh: 1.06, w: 600 }, smallLabel: { f: 'body', size: 24, lh: 1.3, w: 500 },
+    },
+  },
   bold_promo: {
     variant: 'light', display: 'Anton', body: 'Archivo', mono: 'Archivo', buttonRadius: 4, cardRadius: 12,
     type: {
@@ -68,9 +131,6 @@ function inPhotoTokens(tk: any): any {
 }
 
 // ── Block primitives ────────────────────────────────────────
-// (This staged engine implements the primitives Bold Promo + Studio Lux use.
-//  index / statBig / bars / statGrid / statRow / list / checklist / twoColumn
-//  arrive with the data/soft/clinical recipes.)
 function renderBlock(b: any, ctx: any): any {
   const { recipe, tk, content, align } = ctx;
   const t = (role: string) => recipe.type[role];
@@ -100,9 +160,16 @@ function renderBlock(b: any, ctx: any): any {
     case 'body':
       if (!val) return null;
       return textNode(b.scale || 'body', val, tk.textBody, { marginTop: 24 });
+    case 'index': {
+      const raw = val != null ? String(val) : String(content.slide_number ?? 1).padStart(2, '0');
+      return textNode('index', raw, ink('index', 'accent'), { lineHeight: NUM_LH, marginBottom: 12 });
+    }
     case 'statNumber':
       if (!val) return null;
       return textNode('stat', val, ink('stat', 'accent'), { lineHeight: NUM_LH, marginBottom: 10 });
+    case 'statBig':
+      if (!val) return null;
+      return textNode('statBig', val, ink('statBig', 'accent'), { lineHeight: NUM_LH, marginBottom: 6 });
     case 'statLabel':
       if (!val) return null;
       return textNode('statLabel', val, tk.textBody, { marginTop: 4 });
@@ -114,6 +181,70 @@ function renderBlock(b: any, ctx: any): any {
     case 'attribution':
       if (!val) return null;
       return textNode('attribution', val, tk.textMuted, { marginTop: 28 });
+    case 'statRow': {
+      const stats: any[] = content.stats || b.items;
+      if (!stats || !stats.length) return null;
+      const items = stats.slice(0, 3);
+      return row({ marginTop: 40, justifyContent: align === 'left' ? 'flex-start' : 'center', alignItems: 'flex-start' },
+        items.map((s: any, i: number) => col({ marginRight: i < items.length - 1 ? 64 : 0, alignItems: align === 'left' ? 'flex-start' : 'center' }, [
+          textNode('statBig', s.number, ink('statBig', 'accent'), { lineHeight: NUM_LH, marginBottom: 6, maxWidth: undefined }),
+          textNode('smallLabel', s.label, tk.textMuted, { maxWidth: 280, textAlign: align === 'left' ? 'left' : 'center' }),
+        ])));
+    }
+    case 'statGrid': {
+      const gs: any[] = content.gridStats || b.items;
+      if (!gs || !gs.length) return null;
+      const cell = (s: any) => col({ width: '50%', paddingTop: 16, paddingBottom: 16, paddingRight: 24 }, [
+        textNode('statBig', s.number, ink('statBig', 'accent'), { lineHeight: NUM_LH, marginBottom: 6, maxWidth: undefined }),
+        textNode('smallLabel', s.label, tk.textMuted, { maxWidth: 360, textAlign: 'left' }),
+      ]);
+      const rows: any[] = [];
+      for (let i = 0; i < gs.length; i += 2) rows.push(row({ width: '100%' }, gs.slice(i, i + 2).map(cell)));
+      return col({ marginTop: 36, width: '100%' }, rows);
+    }
+    case 'bars': {
+      const bars: any[] = content.bars || b.items;
+      if (!bars || !bars.length) return null;
+      return col({ marginTop: 36, width: '100%' }, bars.map((bar: any) => col({ width: '100%', marginBottom: 26 }, [
+        row({ width: '100%', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 }, [
+          textNode('smallLabel', bar.label, tk.textBody, { maxWidth: undefined, textAlign: 'left' }),
+          div({ fontFamily: recipe.display, fontSize: 40, fontWeight: 700, color: ink('stat', 'accent'), lineHeight: 1 }, String(bar.value)),
+        ]),
+        div({ width: '100%', height: 18, backgroundColor: tk.surfaceAlt, borderRadius: 4 }, [
+          div({ width: `${Math.max(2, Math.min(100, bar.pct || 0))}%`, height: 18, backgroundColor: tk.accent, borderRadius: 4 }),
+        ]),
+      ])));
+    }
+    case 'list': {
+      const items: any[] = content.items || b.items;
+      if (!items || !items.length) return null;
+      return col({ marginTop: 30, width: '100%' }, items.map((it: any, i: number) => row({ width: '100%', marginBottom: 20, alignItems: 'flex-start' }, [
+        col({ width: 56, height: 56, borderRadius: recipe.buttonRadius === 999 ? 999 : 12, backgroundColor: tk.accent, alignItems: 'center', justifyContent: 'center', marginRight: 24 }, [
+          div({ fontFamily: recipe.body, fontSize: 28, fontWeight: 700, color: tk.accentText }, String(i + 1)),
+        ]),
+        textNode('body', it, tk.textBody, { maxWidth: W - PADX * 2 - 90, textAlign: 'left', marginTop: 6 }),
+      ])));
+    }
+    case 'checklist': {
+      const checks: any[] = content.checks || content.items || b.items;
+      if (!checks || !checks.length) return null;
+      return col({ marginTop: 30, width: '100%' }, checks.map((it: any) => row({ width: '100%', marginBottom: 20, alignItems: 'flex-start' }, [
+        col({ width: 46, height: 46, borderRadius: recipe.buttonRadius === 999 ? 999 : 10, backgroundColor: tk.accentSoft, alignItems: 'center', justifyContent: 'center', marginRight: 22 }, [
+          div({ width: 16, height: 9, borderLeft: `4px solid ${tk.accent}`, borderBottom: `4px solid ${tk.accent}`, transform: 'rotate(-45deg)', marginTop: -4 }),
+        ]),
+        textNode('body', it, tk.textBody, { maxWidth: W - PADX * 2 - 80, textAlign: 'left', marginTop: 4 }),
+      ])));
+    }
+    case 'twoColumn': {
+      const L = { t: content.left_title, b: content.left_body };
+      const R = { t: content.right_title, b: content.right_body };
+      if (!L.t && !R.t) return null;
+      const colBlock = (c: any, accentLabel: boolean) => col({ width: '50%', paddingRight: 28 }, [
+        textNode('eyebrow', c.t || '', accentLabel ? ink('eyebrow', 'accent') : tk.textMuted, { marginBottom: 12, maxWidth: undefined, textAlign: 'left' }),
+        textNode('body', c.b || '', tk.textBody, { maxWidth: 420, textAlign: 'left' }),
+      ]);
+      return row({ marginTop: 30, width: '100%' }, [colBlock(L, false), colBlock(R, true)]);
+    }
     case 'ctaButton': {
       if (!val) return null;
       const r = t('button');
@@ -130,7 +261,7 @@ function renderBlock(b: any, ctx: any): any {
         return div({ marginBottom: 26 }, [{ type: 'img', props: { src: content.logo_url, style: { display: 'flex', height: 64, objectFit: 'contain' } } }]);
       }
       const mono = b.text || (content.brand_name ? String(content.brand_name).slice(0, 1).toUpperCase() : 'V');
-      const children = [
+      const children: any[] = [
         div({ width: 56, height: 56, borderRadius: recipe.buttonRadius === 999 ? 999 : 12, backgroundColor: tk.accent, alignItems: 'center', justifyContent: 'center' }, [
           div({ fontFamily: recipe.display, fontSize: 30, fontWeight: 700, color: tk.accentText }, mono),
         ]),
@@ -206,6 +337,45 @@ export function buildGooglePiece(content: any, tk0: any, recipe: any): any {
 }
 
 // ── Skeleton descriptors per recipe ─────────────────────────
+const CLINICAL: any[] = [
+  { id: 'framed_cover', slideType: 'cover', frame: true, align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'rule' }, { kind: 'title', field: 'title', scale: 'display' }, { kind: 'body', field: 'body_text', scale: 'lead' }] },
+  { id: 'numbered_lead', slideType: 'content', align: 'left', vAnchor: 'center', blocks: [{ kind: 'index', field: 'index' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'split_mito_realidad', slideType: 'content', align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'twoColumn' }] },
+  { id: 'floating_card', slideType: 'content', card: true, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'photo_half', slideType: 'content', media: 'top', align: 'left', vAnchor: 'top', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'hero_stat', slideType: 'big_stat', align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'statNumber', field: 'stat_number' }, { kind: 'statLabel', field: 'stat_label' }] },
+  { id: 'pull_quote', slideType: 'quote', align: 'left', vAnchor: 'center', blocks: [{ kind: 'quoteMark' }, { kind: 'quote', field: 'title' }, { kind: 'attribution', field: 'quote_attribution' }] },
+  { id: 'cta_panel', slideType: 'cta', align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
+];
+const DATA_STORY: any[] = [
+  { id: 'ds_index_cover', slideType: 'cover', background: { style: 'grid' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'display' }, { kind: 'statRow' }] },
+  { id: 'ds_bar_compare', slideType: 'content', background: { style: 'grid' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'bars' }] },
+  { id: 'ds_stat_grid', slideType: 'content', background: { style: 'grid' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'statGrid' }] },
+  { id: 'ds_hero_stat', slideType: 'big_stat', background: { style: 'grid' }, align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'statNumber', field: 'stat_number' }, { kind: 'statLabel', field: 'stat_label' }] },
+  { id: 'ds_cta', slideType: 'cta', background: { style: 'grid' }, align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
+];
+const SOFT: any[] = [
+  { id: 'soft_cover', slideType: 'cover', background: { style: 'gradient' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'display' }, { kind: 'body', field: 'body_text', scale: 'lead' }] },
+  { id: 'rounded_card', slideType: 'content', card: true, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'soft_numbered', slideType: 'content', background: { style: 'gradient' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'list' }] },
+  { id: 'soft_checklist', slideType: 'content', background: { style: 'gradient' }, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'checklist' }] },
+  { id: 'soft_stat', slideType: 'big_stat', background: { style: 'gradient' }, align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'statNumber', field: 'stat_number' }, { kind: 'statLabel', field: 'stat_label' }] },
+  { id: 'soft_cta', slideType: 'cta', background: { style: 'gradient' }, align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
+];
+const MONO: any[] = [
+  { id: 'mono_cover', slideType: 'cover', align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'rule' }, { kind: 'title', field: 'title', scale: 'display' }] },
+  { id: 'mono_numbered', slideType: 'content', align: 'left', vAnchor: 'center', blocks: [{ kind: 'index', field: 'index' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'mono_stat', slideType: 'big_stat', align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'statNumber', field: 'stat_number' }, { kind: 'statLabel', field: 'stat_label' }] },
+  { id: 'mono_quote', slideType: 'quote', align: 'left', vAnchor: 'center', blocks: [{ kind: 'quoteMark' }, { kind: 'quote', field: 'title' }, { kind: 'attribution', field: 'quote_attribution' }] },
+  { id: 'mono_cta', slideType: 'cta', align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
+];
+const NOIR: any[] = [
+  { id: 'noir_cover', slideType: 'cover', frame: true, align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'display' }, { kind: 'body', field: 'body_text', scale: 'lead' }] },
+  { id: 'noir_numbered', slideType: 'content', align: 'left', vAnchor: 'center', blocks: [{ kind: 'index', field: 'index' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
+  { id: 'noir_stat', slideType: 'big_stat', align: 'center', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'statNumber', field: 'stat_number' }, { kind: 'statLabel', field: 'stat_label' }] },
+  { id: 'noir_quote', slideType: 'quote', align: 'left', vAnchor: 'center', blocks: [{ kind: 'quoteMark' }, { kind: 'quote', field: 'title' }, { kind: 'attribution', field: 'quote_attribution' }] },
+  { id: 'noir_cta', slideType: 'cta', frame: true, align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
+];
 const BOLD: any[] = [
   { id: 'bold_cover', slideType: 'cover', onAccent: true, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'display' }, { kind: 'body', field: 'body_text', scale: 'lead' }] },
   { id: 'bold_offer', slideType: 'content', onAccent: true, align: 'left', vAnchor: 'center', blocks: [{ kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'h1' }, { kind: 'body', field: 'body_text' }] },
@@ -220,7 +390,10 @@ const STUDIO: any[] = [
   { id: 'lux_cta', slideType: 'cta', align: 'center', vAnchor: 'center', blocks: [{ kind: 'logo', text: 'CF' }, { kind: 'eyebrow', field: 'subtitle' }, { kind: 'title', field: 'title', scale: 'cta' }, { kind: 'ctaButton', field: 'body_text' }] },
 ];
 
-const SETS: AnyObj = { bold_promo: BOLD, studio_lux: STUDIO };
+const SETS: AnyObj = {
+  clinical_editorial: CLINICAL, data_story: DATA_STORY, soft_wellness: SOFT,
+  mono_premium: MONO, noir: NOIR, bold_promo: BOLD, studio_lux: STUDIO,
+};
 
 function famList(recipe: any): string[] {
   return Array.from(new Set([recipe.display, recipe.body, recipe.mono].filter(Boolean)));
@@ -229,8 +402,6 @@ function famList(recipe: any): string[] {
 export interface RecipeRenderResult { node: any; fontFamilies: string[]; width: number; height: number; recipe: string; template: string; }
 
 // Entry point used by api/render-slide.ts when a request carries `recipe`.
-// Maps the request to (recipe, descriptor, content) and returns the Satori node
-// plus the font families to load. Throws on an unknown recipe.
 export function buildRecipeSlide(body: any): RecipeRenderResult {
   const recipeKey: string = body.recipe;
   const recipe = RECIPES[recipeKey];
@@ -252,6 +423,14 @@ export function buildRecipeSlide(body: any): RecipeRenderResult {
     stat_number: body.stat_number,
     stat_label: body.stat_label,
     quote_attribution: body.quote_attribution || body.attribution,
+    index: body.index,
+    stats: body.stats,
+    bars: body.bars,
+    gridStats: body.grid_stats || body.gridStats,
+    items: body.items,
+    checks: body.checks,
+    left_title: body.left_title, left_body: body.left_body,
+    right_title: body.right_title, right_body: body.right_body,
     brand_name: brand.name,
     logo_url: brand.logo_url || null,
     asset_url: body.asset_url || null,
@@ -259,7 +438,6 @@ export function buildRecipeSlide(body: any): RecipeRenderResult {
     total: body.total_slides || set.length,
   };
 
-  // Bold Promo's Google 4:3 promo image is a dedicated builder.
   if (recipeKey === 'bold_promo' && (wanted === 'bold_google' || body.slide_type === 'google_promo')) {
     return { node: buildGooglePiece(content, tk, recipe), fontFamilies: famList(recipe), width: 1200, height: 900, recipe: recipeKey, template: 'bold_google' };
   }
