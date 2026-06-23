@@ -5,7 +5,8 @@
   "description": "Vibemarket Carousel & GMB Post Rendering Service - Satori + Resvg",
   "dependencies": {
     "satori": "^0.10.0",
-    "@resvg/resvg-js": "^2.6.0"
+    "@resvg/resvg-js": "^2.6.0",
+    "satori-html": "^0.3.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
