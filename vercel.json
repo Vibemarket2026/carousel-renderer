@@ -8,6 +8,15 @@
         "maxDuration": 30,
         "includeFiles": "fonts/**"
       }
+    },
+    {
+      "src": "api/render-html.ts",
+      "use": "@vercel/node",
+      "config": {
+        "memory": 1024,
+        "maxDuration": 30,
+        "includeFiles": "fonts/**"
+      }
     }
   ]
 }
