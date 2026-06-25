@@ -101,6 +101,13 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
     accentSoft = dark ? mix(primary, '#000000', 0.55) : mix(primary, '#FFFFFF', 0.78);
   }
 
+  // accent-tint: tinte MUY suave SIEMPRE derivado del primario (nunca del secundario).
+  // Pensado para formas decorativas grandes de fondo (círculos/blobs), donde un
+  // secundario de marca saturado (p.ej. un azul fuerte) se leería como bloque de
+  // color. Al derivarlo del primario, queda alineado a marca y a salvo de secundarios
+  // agresivos, manteniéndose como un wash sutil sobre el fondo.
+  const accentTint = dark ? mix(primary, '#000000', 0.62) : mix(primary, '#FFFFFF', 0.86);
+
   const textTitleBase = dark ? '#F4F1EA' : '#1F2A24';
   const textBodyBase = dark ? '#C9C4BD' : '#4A574F';
   const textMutedBase = dark ? '#8A847C' : '#8A938C';
@@ -113,7 +120,8 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
     '--text-body': ensureContrast(textBodyBase, bg, 4.5),
     '--text-muted': ensureContrast(textMutedBase, bg, 3),
     '--accent': accent,                       // relleno (botones, formas) — sin tocar
-    '--accent-soft': accentSoft,
+    '--accent-soft': accentSoft,              // fondo de slide / tarjetas con texto
+    '--accent-tint': accentTint,              // wash decorativo seguro (círculos/blobs de fondo)
     '--accent-text': bestTextOn(accent),      // texto SOBRE accent (contraste garantizado)
     '--accent-on-bg': accentForText(accent, bg, 4.5), // accent usable como texto sobre bg
     '--hairline': hairline,
