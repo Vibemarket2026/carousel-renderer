@@ -257,9 +257,9 @@ function renderBlock(b: any, ctx: any): any {
       ]);
     }
     case 'logo': {
-      if (content.logo_url) {
-        return div({ marginBottom: 26 }, [{ type: 'img', props: { src: content.logo_url, style: { display: 'flex', height: 64, objectFit: 'contain' } } }]);
-      }
+      // Bug 2: NUNCA incrustar el logo como imagen. Se usa siempre un monograma
+      // tipográfico (iniciales). El logo de marca no debe aparecer embebido en
+      // ninguna slide generada.
       const mono = b.text || (content.brand_name ? String(content.brand_name).slice(0, 1).toUpperCase() : 'V');
       const children: any[] = [
         div({ width: 56, height: 56, borderRadius: recipe.buttonRadius === 999 ? 999 : 12, backgroundColor: tk.accent, alignItems: 'center', justifyContent: 'center' }, [
