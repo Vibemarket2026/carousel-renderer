@@ -74,6 +74,24 @@ function fillTemplate(htmlTpl: string, fields: Record<string, unknown>, tokens: 
   return out;
 }
 
+// ── Bug 3: stat sin número ───────────────────────────────────────────
+// Algunos esqueletos `*_stat` reservan un <span> enorme para {{stat_number}}.
+// Si el agente no envía número (stat_number vacío), ese span queda vacío y
+// descoloca la composición, y el `context` se ve diminuto. Cuando no hay
+// número, eliminamos el <span> del número del HTML resuelto para que el
+// `stat_label` pase a ser el protagonista y el `context` quede debajo sin
+// hueco. Es defensivo: si no encuentra el patrón, no toca nada.
+function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknown>): string {
+  const n = fields?.stat_number;
+  const hasNumber = n != null && String(n).trim() !== '';
+  if (hasNumber) return resolvedHtml;
+  // El span del número se reconoce por un font-size muy grande (>=200px) y
+  // estar vacío tras la sustitución. Capturamos
+  // <span ...font-size:NNNpx...></span> con NNN>=200 y contenido vacío.
+  const re = /<span[^>]*font-size:(\d{3,})px[^>]*>\s*<\/span>/g;
+  return resolvedHtml.replace(re, (m, size) => (parseInt(size, 10) >= 200 ? '' : m));
+}
+
 // ── Normalizador Satori: display:flex explícito en cada <div> ────────
 // Satori exige display:flex (o none) en todo div con >1 hijo. Forzamos flex
 // en todos los div; respetamos flex-direction si ya viene declarado, si no,
@@ -124,7 +142,9 @@ export default async function handler(req: any, res: any) {
     tokens['--font-body'] = fontBody;
 
     // 2. Inyectar contenido + tokens en el esqueleto.
-    const resolvedHtml = fillTemplate(skeletonHtml, fields, tokens);
+    let resolvedHtml = fillTemplate(skeletonHtml, fields, tokens);
+    // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
+    resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
 
     // 3. HTML -> vnode -> normalizar display:flex.
     const tree = normalizeFlex(toVNode(resolvedHtml));
