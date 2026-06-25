@@ -92,6 +92,52 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
   return resolvedHtml.replace(re, (m, size) => (parseInt(size, 10) >= 200 ? '' : m));
 }
 
+// ── Logo en la slide de cierre (cta) ─────────────────────────────────
+// Inserta el logo de marca arriba centrado SOLO en la última slide (cta),
+// SOLO si hay logo_url y la variante es 'light' (en fondos oscuros el logo —
+// casi siempre oscuro y no recoloreable por ser PNG— quedaría sin contraste,
+// así que se omite y se mantiene el nombre en texto que ya trae el esqueleto).
+// Se descarga la imagen a data-URI ANTES de pasarla a Satori; si la descarga
+// falla, se omite el logo (no se rompe el render de la cta). Se inyecta como
+// primer hijo del <div> raíz, en position:absolute, para no descolocar el
+// layout de ninguna de las 12 plantillas de cta.
+const logoCache: Map<string, string> = new Map();
+async function fetchLogoDataUri(url: string): Promise<string | null> {
+  const cached = logoCache.get(url);
+  if (cached !== undefined) return cached || null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { logoCache.set(url, ''); return null; }
+    const ct = (r.headers.get('content-type') || '').toLowerCase();
+    // Satori soporta png/jpeg/svg como <img>. Aceptamos esos tipos.
+    let mime = 'image/png';
+    if (ct.includes('svg')) mime = 'image/svg+xml';
+    else if (ct.includes('jpeg') || ct.includes('jpg')) mime = 'image/jpeg';
+    else if (ct.includes('png')) mime = 'image/png';
+    else if (ct.includes('webp')) { logoCache.set(url, ''); return null; } // webp no fiable en Satori
+    const buf = Buffer.from(await r.arrayBuffer());
+    const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
+    logoCache.set(url, dataUri);
+    return dataUri;
+  } catch { logoCache.set(url, ''); return null; }
+}
+
+async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null }): Promise<string> {
+  const { skeletonId, variant, logoUrl } = opts;
+  const isCta = typeof skeletonId === 'string' && /_cta$/.test(skeletonId);
+  if (!isCta || variant === 'dark' || !logoUrl) return resolvedHtml;
+  const dataUri = await fetchLogoDataUri(logoUrl);
+  if (!dataUri) return resolvedHtml; // logo no descargable -> se queda el nombre en texto
+  const logoBlock =
+    '<div style="position:absolute;top:64px;left:0;right:0;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
+    '<img src="' + dataUri + '" width="200" height="72" style="display:flex;height:72px;width:auto;max-width:340px;object-fit:contain;" />' +
+    '</div>';
+  const m = resolvedHtml.match(/<div[^>]*>/);
+  if (!m) return resolvedHtml;
+  const insertAt = (m.index || 0) + m[0].length;
+  return resolvedHtml.slice(0, insertAt) + logoBlock + resolvedHtml.slice(insertAt);
+}
+
 // ── Normalizador Satori: display:flex explícito en cada <div> ────────
 // Satori exige display:flex (o none) en todo div con >1 hijo. Forzamos flex
 // en todos los div; respetamos flex-direction si ya viene declarado, si no,
@@ -145,6 +191,12 @@ export default async function handler(req: any, res: any) {
     let resolvedHtml = fillTemplate(skeletonHtml, fields, tokens);
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
+    // 2c. Logo de marca en la slide de cierre (cta), si procede.
+    resolvedHtml = await injectCtaLogo(resolvedHtml, {
+      skeletonId: body?.meta?.skeleton_id || '',
+      variant,
+      logoUrl: body?.brand?.logo_url || null,
+    });
 
     // 3. HTML -> vnode -> normalizar display:flex.
     const tree = normalizeFlex(toVNode(resolvedHtml));
