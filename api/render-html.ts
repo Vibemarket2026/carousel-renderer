@@ -29,7 +29,7 @@
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { html as toVNode } from 'satori-html';
-import { deriveTokens, BrandColors, RecipeVariant, Tokens } from '../lib/skeleton-tokens.js';
+import { deriveTokens, BrandColors, RecipeVariant, Tokens, BgRecipe } from '../lib/skeleton-tokens.js';
 import { loadBrandFonts } from '../lib/skeleton-fonts.js';
 
 // ── Emoji via Twemoji (idéntico patrón a render-slide.ts) ────────────
@@ -178,12 +178,17 @@ export default async function handler(req: any, res: any) {
     const fontHeading: string = body?.brand?.font_heading || 'Instrument Serif';
     const fontBody: string = body?.brand?.font_body || 'Inter';
     const variant: RecipeVariant = body?.variant === 'dark' ? 'dark' : 'light';
+    // Receta de fondo por estilo (opcional). Viene de global_rules.bg del estilo,
+    // reenviada por n8n como body.bg_recipe. Si no llega, deriveTokens usa el crema.
+    const bgRecipe: BgRecipe | null = (body?.bg_recipe && typeof body.bg_recipe === 'object')
+      ? { tint: body.bg_recipe.tint, warm: body.bg_recipe.warm }
+      : null;
 
     const width = body?.output?.width || 1080;
     const height = body?.output?.height || 1350;
 
     // 1. Tokens con contraste. Las familias de marca entran como tokens de fuente.
-    const tokens = deriveTokens(brandColors, variant);
+    const tokens = deriveTokens(brandColors, variant, bgRecipe);
     tokens['--font-display'] = fontHeading;
     tokens['--font-body'] = fontBody;
 
