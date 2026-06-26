@@ -84,12 +84,36 @@ function accentForText(accent: string, bg: string, ratio = 4.5): string {
   return best;
 }
 
-export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light'): Tokens {
+// Receta de fondo por ESTILO (variante light). El fondo se deriva del color de
+// marca para que varíe por estilo Y por marca, en vez de ser siempre el mismo
+// crema. tint = cuánto blanco se mezcla con el primario (mayor => más claro);
+// warm = cuánto se desplaza luego hacia el crema base (calidez). El resultado
+// se fuerza a un contraste muy alto con el texto para que SIEMPRE sea legible.
+export interface BgRecipe { tint?: number; warm?: number; }
+const CREAM_BASE = '#F4F1EA';
+
+function computeStyleBg(primary: string, recipe: BgRecipe | null | undefined, textTitle: string): string {
+  // Sin receta -> crema clásico (compatibilidad con estilos sin bg definido).
+  if (!recipe || (recipe.tint == null && recipe.warm == null)) return CREAM_BASE;
+  const tint = typeof recipe.tint === 'number' ? Math.min(0.99, Math.max(0.80, recipe.tint)) : 0.94;
+  const warm = typeof recipe.warm === 'number' ? Math.min(0.6, Math.max(0, recipe.warm)) : 0;
+  let bg = mix(primary, '#FFFFFF', tint);
+  if (warm > 0) bg = mix(bg, CREAM_BASE, warm);
+  // Garantía dura: el fondo debe quedar MUY claro frente al texto de título.
+  // Si un primario raro lo dejara apagado, lo aclaramos hacia blanco hasta 8.5:1.
+  let guard = 0;
+  while (contrast(bg, textTitle) < 8.5 && guard < 12) { bg = mix(bg, '#FFFFFF', 0.15); guard++; }
+  return bg;
+}
+
+export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light', bgRecipe?: BgRecipe | null): Tokens {
   const primary = (brand.color_primary && brand.color_primary.trim()) || '#1E6E5A';
   const secondaryRaw = (brand.color_secondary && brand.color_secondary.trim()) || '';
   const dark = variant === 'dark';
 
-  const bg = dark ? '#14110F' : '#F4F1EA';
+  // Fondo: en dark, el oscuro de siempre. En light, derivado del estilo+marca
+  // (con fallback al crema si el estilo no trae receta).
+  const bg = dark ? '#14110F' : computeStyleBg(primary, bgRecipe, '#1F2A24');
   const surface = dark ? '#1E1A17' : '#FFFFFF';
   const accent = primary;
 
@@ -101,12 +125,22 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
     accentSoft = dark ? mix(primary, '#000000', 0.55) : mix(primary, '#FFFFFF', 0.78);
   }
 
-  // accent-tint: tinte MUY suave SIEMPRE derivado del primario (nunca del secundario).
-  // Pensado para formas decorativas grandes de fondo (círculos/blobs), donde un
-  // secundario de marca saturado (p.ej. un azul fuerte) se leería como bloque de
-  // color. Al derivarlo del primario, queda alineado a marca y a salvo de secundarios
-  // agresivos, manteniéndose como un wash sutil sobre el fondo.
-  const accentTint = dark ? mix(primary, '#000000', 0.62) : mix(primary, '#FFFFFF', 0.86);
+  // accent-tint: tinte suave del primario para formas decorativas grandes de
+  // fondo (círculos/blobs). Debe DESTACAR sobre --bg. Como ahora --bg puede ir
+  // tintado de marca (mismo matiz que el tint), partimos del nivel suave y, si
+  // no separa lo suficiente del fondo, lo intensificamos (menos blanco) hasta
+  // lograr una diferencia visible. En dark se mantiene el cálculo anterior.
+  let accentTint: string;
+  if (dark) {
+    accentTint = mix(primary, '#000000', 0.62);
+  } else {
+    let t = 0.86;
+    accentTint = mix(primary, '#FFFFFF', t);
+    let tg = 0;
+    while (contrast(accentTint, bg) < 1.12 && t > 0.55 && tg < 20) {
+      t -= 0.03; accentTint = mix(primary, '#FFFFFF', t); tg++;
+    }
+  }
 
   const textTitleBase = dark ? '#F4F1EA' : '#1F2A24';
   const textBodyBase = dark ? '#C9C4BD' : '#4A574F';
