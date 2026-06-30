@@ -98,11 +98,8 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
 // SOLO si hay logo_url y la variante es 'light' (en fondos oscuros el logo —
 // casi siempre oscuro y no recoloreable por ser PNG— quedaría sin contraste,
 // así que se omite y se mantiene el nombre en texto que ya trae el esqueleto).
-// Se descarga la imagen a data-URI ANTES de pasarla a Satori; si la descarga
-// falla, se omite el logo (no se rompe el render de la cta). Se inyecta como
-// primer hijo del <div> raíz, en position:absolute, para no descolocar el
-// layout de ninguna de las 12 plantillas de cta. Devuelve además un `status`
-// de diagnóstico (inserted | skip_*) que el handler expone en la respuesta.
+// Cuando SÍ se inserta el logo, el {{brand_name}} en texto del esqueleto se
+// vacía (stripBrandNameSpan) para no duplicar la marca.
 //
 // DOS RESTRICCIONES DE SATORI QUE HAY QUE RESPETAR EN EL BLOQUE DEL LOGO:
 //  1) El contenedor absolute usa left:0;width:1080px (NO left:0;right:0):
@@ -111,6 +108,9 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
 //     con width:auto Satori inserta el <image> en el SVG pero NO lo rasteriza
 //     (la imagen sale invisible). Caja fija 360x96 + object-fit:contain ->
 //     el logo se pinta y conserva su proporción centrado en la caja.
+// El logo (PNG, normalmente transparente) se aplana sobre el fondo REAL de la
+// slide (detectRootBg) para que la zona transparente se funda con el fondo y no
+// quede un recuadro. El fondo real puede ser --bg o --accent según el estilo.
 const logoCache: Map<string, string> = new Map();
 
 function hexToRgbTuple(hex: string): [number, number, number] {
@@ -170,12 +170,31 @@ async function fetchLogoDataUri(url: string, bgHex: string): Promise<string | nu
   } catch { logoCache.set(cacheKey, ''); return null; }
 }
 
-async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null; bgHex: string }): Promise<{ html: string; status: string }> {
-  const { skeletonId, variant, logoUrl, bgHex } = opts;
+// Detecta el color de fondo REAL del div raíz del HTML ya resuelto (los tokens
+// ya son hex). Los esqueletos usan background:#xxxxxx en el primer div; la
+// mayoría es --bg pero algunos estilos "invertidos" (p.ej. retro_warm) usan
+// --accent. Aplanar el logo sobre ESTE color evita el recuadro blanco.
+function detectRootBg(resolvedHtml: string, fallback: string): string {
+  const m = resolvedHtml.match(/<div[^>]*background:\s*(#[0-9a-fA-F]{3,8})/);
+  return m ? m[1] : fallback;
+}
+
+// Cuando vamos a poner el logo en la cta, el {{brand_name}} en texto que el
+// esqueleto pinta arriba sobra (duplicaría la marca). Vaciamos el contenido del
+// <span> que contiene {{brand_name}} (se hace sobre el skeleton CRUDO, antes de
+// resolver el marcador). Mantener el <span> vacío preserva el layout flex.
+function stripBrandNameSpan(skeletonHtml: string): string {
+  return skeletonHtml.replace(/(<span[^>]*>)([^<]*\{\{brand_name\}\}[^<]*)(<\/span>)/g, '$1$3');
+}
+
+async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null; fallbackBg: string }): Promise<{ html: string; status: string }> {
+  const { skeletonId, variant, logoUrl, fallbackBg } = opts;
   const isCta = typeof skeletonId === 'string' && /_cta$/.test(skeletonId);
   if (!isCta) return { html: resolvedHtml, status: 'skip_not_cta' };
   if (variant === 'dark') return { html: resolvedHtml, status: 'skip_dark_variant' };
   if (!logoUrl) return { html: resolvedHtml, status: 'skip_no_logo_url' };
+  // Aplanar el logo sobre el fondo REAL de esta slide (no un color asumido).
+  const bgHex = detectRootBg(resolvedHtml, fallbackBg);
   const dataUri = await fetchLogoDataUri(logoUrl, bgHex);
   if (!dataUri) return { html: resolvedHtml, status: 'skip_logo_fetch_failed' }; // descarga falló -> nombre en texto
   // Ver restricciones de Satori arriba: left:0;width:1080px y <img> con dims fijas.
@@ -244,15 +263,20 @@ export default async function handler(req: any, res: any) {
     tokens['--font-body'] = fontBody;
 
     // 2. Inyectar contenido + tokens en el esqueleto.
-    let resolvedHtml = fillTemplate(skeletonHtml, fields, tokens);
+    // 2a. Si esta slide es cta, light y la marca tiene logo, el logo sustituirá
+    //     al nombre en texto: lo vaciamos del esqueleto para no duplicar marca.
+    const skeletonMeta = body?.meta?.skeleton_id || '';
+    const willInsertLogo = /_cta$/.test(skeletonMeta) && variant !== 'dark' && !!(body?.brand?.logo_url);
+    const baseSkeleton = willInsertLogo ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
+    let resolvedHtml = fillTemplate(baseSkeleton, fields, tokens);
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
     // 2c. Logo de marca en la slide de cierre (cta), si procede.
     const logoResult = await injectCtaLogo(resolvedHtml, {
-      skeletonId: body?.meta?.skeleton_id || '',
+      skeletonId: skeletonMeta,
       variant,
       logoUrl: body?.brand?.logo_url || null,
-      bgHex: tokens['--bg'] || '#F4F1EA',
+      fallbackBg: tokens['--bg'] || '#F4F1EA',
     });
     resolvedHtml = logoResult.html;
 
