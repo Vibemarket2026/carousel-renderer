@@ -103,6 +103,12 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
 // primer hijo del <div> raíz, en position:absolute, para no descolocar el
 // layout de ninguna de las 12 plantillas de cta. Devuelve además un `status`
 // de diagnóstico (inserted | skip_*) que el handler expone en la respuesta.
+//
+// NOTA Satori (importante): el contenedor del logo usa `left:0;width:1080px`,
+// NO `left:0;right:0`. Satori no resuelve el ancho de un elemento
+// position:absolute cuando se fijan left+right a la vez; en ese caso inserta el
+// <img> en el SVG pero NO lo rasteriza (la imagen sale invisible). Con un width
+// explícito sí se pinta. 1080 = ancho fijo de todos los esqueletos.
 const logoCache: Map<string, string> = new Map();
 
 function hexToRgbTuple(hex: string): [number, number, number] {
@@ -170,8 +176,9 @@ async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; v
   if (!logoUrl) return { html: resolvedHtml, status: 'skip_no_logo_url' };
   const dataUri = await fetchLogoDataUri(logoUrl, bgHex);
   if (!dataUri) return { html: resolvedHtml, status: 'skip_logo_fetch_failed' }; // descarga falló -> nombre en texto
+  // OJO: left:0;width:1080px (no left:0;right:0). Ver NOTA Satori arriba.
   const logoBlock =
-    '<div style="position:absolute;top:64px;left:0;right:0;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
+    '<div style="position:absolute;top:64px;left:0;width:1080px;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
     '<img src="' + dataUri + '" width="200" height="72" style="display:flex;height:72px;width:auto;max-width:340px;object-fit:contain;" />' +
     '</div>';
   const m = resolvedHtml.match(/<div[^>]*>/);
