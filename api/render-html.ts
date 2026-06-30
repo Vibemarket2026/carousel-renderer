@@ -100,7 +100,8 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
 // Se descarga la imagen a data-URI ANTES de pasarla a Satori; si la descarga
 // falla, se omite el logo (no se rompe el render de la cta). Se inyecta como
 // primer hijo del <div> raíz, en position:absolute, para no descolocar el
-// layout de ninguna de las 12 plantillas de cta.
+// layout de ninguna de las 12 plantillas de cta. Devuelve además un `status`
+// de diagnóstico (inserted | skip_*) que el handler expone en la respuesta.
 const logoCache: Map<string, string> = new Map();
 async function fetchLogoDataUri(url: string): Promise<string | null> {
   const cached = logoCache.get(url);
@@ -109,12 +110,18 @@ async function fetchLogoDataUri(url: string): Promise<string | null> {
     const r = await fetch(url);
     if (!r.ok) { logoCache.set(url, ''); return null; }
     const ct = (r.headers.get('content-type') || '').toLowerCase();
-    // Satori soporta png/jpeg/svg como <img>. Aceptamos esos tipos.
-    let mime = 'image/png';
-    if (ct.includes('svg')) mime = 'image/svg+xml';
-    else if (ct.includes('jpeg') || ct.includes('jpg')) mime = 'image/jpeg';
-    else if (ct.includes('png')) mime = 'image/png';
-    else if (ct.includes('webp')) { logoCache.set(url, ''); return null; } // webp no fiable en Satori
+    // Determinar el mime. Algunos orígenes (p.ej. Supabase Storage) sirven la
+    // imagen con un content-type genérico (application/octet-stream). En ese
+    // caso NO rechazamos: inferimos el tipo por la extensión de la URL. Solo
+    // descartamos webp explícito (no fiable en Satori).
+    const urlPath = url.split('?')[0].toLowerCase();
+    let mime = '';
+    if (ct.includes('svg') || urlPath.endsWith('.svg')) mime = 'image/svg+xml';
+    else if (ct.includes('jpeg') || ct.includes('jpg') || urlPath.endsWith('.jpg') || urlPath.endsWith('.jpeg')) mime = 'image/jpeg';
+    else if (ct.includes('png') || urlPath.endsWith('.png')) mime = 'image/png';
+    else if (ct.includes('webp') || urlPath.endsWith('.webp')) { logoCache.set(url, ''); return null; } // webp no fiable en Satori
+    else if (ct.startsWith('image/')) mime = ct.split(';')[0].trim(); // otro image/* explícito
+    else mime = 'image/png'; // content-type genérico y sin pista por extensión: asumimos png
     const buf = Buffer.from(await r.arrayBuffer());
     const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
     logoCache.set(url, dataUri);
@@ -122,20 +129,22 @@ async function fetchLogoDataUri(url: string): Promise<string | null> {
   } catch { logoCache.set(url, ''); return null; }
 }
 
-async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null }): Promise<string> {
+async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null }): Promise<{ html: string; status: string }> {
   const { skeletonId, variant, logoUrl } = opts;
   const isCta = typeof skeletonId === 'string' && /_cta$/.test(skeletonId);
-  if (!isCta || variant === 'dark' || !logoUrl) return resolvedHtml;
+  if (!isCta) return { html: resolvedHtml, status: 'skip_not_cta' };
+  if (variant === 'dark') return { html: resolvedHtml, status: 'skip_dark_variant' };
+  if (!logoUrl) return { html: resolvedHtml, status: 'skip_no_logo_url' };
   const dataUri = await fetchLogoDataUri(logoUrl);
-  if (!dataUri) return resolvedHtml; // logo no descargable -> se queda el nombre en texto
+  if (!dataUri) return { html: resolvedHtml, status: 'skip_logo_fetch_failed' }; // descarga falló -> nombre en texto
   const logoBlock =
     '<div style="position:absolute;top:64px;left:0;right:0;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
     '<img src="' + dataUri + '" width="200" height="72" style="display:flex;height:72px;width:auto;max-width:340px;object-fit:contain;" />' +
     '</div>';
   const m = resolvedHtml.match(/<div[^>]*>/);
-  if (!m) return resolvedHtml;
+  if (!m) return { html: resolvedHtml, status: 'skip_no_root_div' };
   const insertAt = (m.index || 0) + m[0].length;
-  return resolvedHtml.slice(0, insertAt) + logoBlock + resolvedHtml.slice(insertAt);
+  return { html: resolvedHtml.slice(0, insertAt) + logoBlock + resolvedHtml.slice(insertAt), status: 'inserted' };
 }
 
 // ── Normalizador Satori: display:flex explícito en cada <div> ────────
@@ -197,11 +206,12 @@ export default async function handler(req: any, res: any) {
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
     // 2c. Logo de marca en la slide de cierre (cta), si procede.
-    resolvedHtml = await injectCtaLogo(resolvedHtml, {
+    const logoResult = await injectCtaLogo(resolvedHtml, {
       skeletonId: body?.meta?.skeleton_id || '',
       variant,
       logoUrl: body?.brand?.logo_url || null,
     });
+    resolvedHtml = logoResult.html;
 
     // 3. HTML -> vnode -> normalizar display:flex.
     const tree = normalizeFlex(toVNode(resolvedHtml));
@@ -225,6 +235,7 @@ export default async function handler(req: any, res: any) {
       success: true,
       image_base64: png.toString('base64'),
       resolved_tokens: tokens,           // para depurar contraste/colores
+      logo_status: logoResult.status,    // diagnóstico: inserted | skip_* (por qué no se puso el logo)
       dimensions: { width, height },
       meta: body?.meta || null,          // passthrough (post_id, slide_number…)
       render_time_ms: Date.now() - startTime,
