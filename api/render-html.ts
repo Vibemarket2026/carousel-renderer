@@ -29,6 +29,7 @@
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { html as toVNode } from 'satori-html';
+import UPNG from 'upng-js';
 import { deriveTokens, BrandColors, RecipeVariant, Tokens, BgRecipe } from '../lib/skeleton-tokens.js';
 import { loadBrandFonts } from '../lib/skeleton-fonts.js';
 
@@ -103,39 +104,71 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
 // layout de ninguna de las 12 plantillas de cta. Devuelve además un `status`
 // de diagnóstico (inserted | skip_*) que el handler expone en la respuesta.
 const logoCache: Map<string, string> = new Map();
-async function fetchLogoDataUri(url: string): Promise<string | null> {
-  const cached = logoCache.get(url);
+
+function hexToRgbTuple(hex: string): [number, number, number] {
+  let h = (hex || '').trim().replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return [255, 255, 255];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+// Aplana un PNG (posiblemente con transparencia) sobre un color de fondo opaco.
+// Satori NO rasteriza de forma fiable los PNG con canal alfa: los inserta en el
+// árbol pero los pinta vacíos. Para evitarlo, decodificamos el PNG con upng-js
+// (JS puro, sin binarios nativos -> seguro en Vercel), componemos el alfa sobre
+// el color de fondo de la slide (así el "recuadro" del logo se funde con el
+// fondo) y re-codificamos un PNG totalmente opaco que Satori sí pinta.
+function flattenPngOverBg(pngBuf: Buffer, bgHex: string): Buffer {
+  const dec = UPNG.decode(pngBuf);
+  const rgba = new Uint8Array(UPNG.toRGBA8(dec)[0]);
+  const [br, bg, bb] = hexToRgbTuple(bgHex);
+  for (let i = 0; i < rgba.length; i += 4) {
+    const a = rgba[i + 3] / 255;
+    rgba[i] = Math.round(rgba[i] * a + br * (1 - a));
+    rgba[i + 1] = Math.round(rgba[i + 1] * a + bg * (1 - a));
+    rgba[i + 2] = Math.round(rgba[i + 2] * a + bb * (1 - a));
+    rgba[i + 3] = 255;
+  }
+  const out = UPNG.encode([rgba.buffer], dec.width, dec.height, 0); // 0 = lossless RGBA
+  return Buffer.from(out);
+}
+
+async function fetchLogoDataUri(url: string, bgHex: string): Promise<string | null> {
+  const cacheKey = url + '|' + bgHex; // el aplanado depende del fondo
+  const cached = logoCache.get(cacheKey);
   if (cached !== undefined) return cached || null;
   try {
     const r = await fetch(url);
-    if (!r.ok) { logoCache.set(url, ''); return null; }
+    if (!r.ok) { logoCache.set(cacheKey, ''); return null; }
     const ct = (r.headers.get('content-type') || '').toLowerCase();
-    // Determinar el mime. Algunos orígenes (p.ej. Supabase Storage) sirven la
-    // imagen con un content-type genérico (application/octet-stream). En ese
-    // caso NO rechazamos: inferimos el tipo por la extensión de la URL. Solo
-    // descartamos webp explícito (no fiable en Satori).
     const urlPath = url.split('?')[0].toLowerCase();
-    let mime = '';
-    if (ct.includes('svg') || urlPath.endsWith('.svg')) mime = 'image/svg+xml';
-    else if (ct.includes('jpeg') || ct.includes('jpg') || urlPath.endsWith('.jpg') || urlPath.endsWith('.jpeg')) mime = 'image/jpeg';
-    else if (ct.includes('png') || urlPath.endsWith('.png')) mime = 'image/png';
-    else if (ct.includes('webp') || urlPath.endsWith('.webp')) { logoCache.set(url, ''); return null; } // webp no fiable en Satori
-    else if (ct.startsWith('image/')) mime = ct.split(';')[0].trim(); // otro image/* explícito
-    else mime = 'image/png'; // content-type genérico y sin pista por extensión: asumimos png
+    const isSvg = ct.includes('svg') || urlPath.endsWith('.svg');
+    const isWebp = ct.includes('webp') || urlPath.endsWith('.webp');
+    if (isWebp) { logoCache.set(cacheKey, ''); return null; } // webp no fiable en Satori
     const buf = Buffer.from(await r.arrayBuffer());
-    const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
-    logoCache.set(url, dataUri);
+    if (isSvg) {
+      // SVG no sufre el problema de alfa de Satori; se pasa tal cual.
+      const dataUri = `data:image/svg+xml;base64,${buf.toString('base64')}`;
+      logoCache.set(cacheKey, dataUri);
+      return dataUri;
+    }
+    // PNG/JPEG: aplanar sobre el fondo para garantizar opacidad (Satori).
+    let outBuf = buf;
+    try { outBuf = flattenPngOverBg(buf, bgHex); }
+    catch { outBuf = buf; } // si upng falla, usar el original (mejor que nada)
+    const dataUri = `data:image/png;base64,${outBuf.toString('base64')}`;
+    logoCache.set(cacheKey, dataUri);
     return dataUri;
-  } catch { logoCache.set(url, ''); return null; }
+  } catch { logoCache.set(cacheKey, ''); return null; }
 }
 
-async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null }): Promise<{ html: string; status: string }> {
-  const { skeletonId, variant, logoUrl } = opts;
+async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null; bgHex: string }): Promise<{ html: string; status: string }> {
+  const { skeletonId, variant, logoUrl, bgHex } = opts;
   const isCta = typeof skeletonId === 'string' && /_cta$/.test(skeletonId);
   if (!isCta) return { html: resolvedHtml, status: 'skip_not_cta' };
   if (variant === 'dark') return { html: resolvedHtml, status: 'skip_dark_variant' };
   if (!logoUrl) return { html: resolvedHtml, status: 'skip_no_logo_url' };
-  const dataUri = await fetchLogoDataUri(logoUrl);
+  const dataUri = await fetchLogoDataUri(logoUrl, bgHex);
   if (!dataUri) return { html: resolvedHtml, status: 'skip_logo_fetch_failed' }; // descarga falló -> nombre en texto
   const logoBlock =
     '<div style="position:absolute;top:64px;left:0;right:0;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
@@ -210,6 +243,7 @@ export default async function handler(req: any, res: any) {
       skeletonId: body?.meta?.skeleton_id || '',
       variant,
       logoUrl: body?.brand?.logo_url || null,
+      bgHex: tokens['--bg'] || '#F4F1EA',
     });
     resolvedHtml = logoResult.html;
 
