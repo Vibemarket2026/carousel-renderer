@@ -93,6 +93,30 @@ function dropEmptyStatNumber(resolvedHtml: string, fields: Record<string, unknow
   return resolvedHtml.replace(re, (m, size) => (parseInt(size, 10) >= 200 ? '' : m));
 }
 
+// ── Bold Statement: título que cabe ──────────────────────────────────
+// El cover de bold_statement usa font-size:176px fijo en el <h1>. Con títulos
+// largos (>3-4 palabras) el texto se sale por abajo y empuja el footer fuera
+// del lienzo. Ajustamos el tamaño del título según su longitud: corto -> 176px
+// (máximo impacto, que es la gracia del estilo), largo -> se reduce hasta caber.
+// Solo se aplica a bold_statement_cover; los demás estilos no se tocan.
+function boldTitleSize(title: string): number {
+  const len = (title || '').trim().length;
+  if (len <= 14) return 176;
+  if (len <= 22) return 150;
+  if (len <= 34) return 128;
+  if (len <= 48) return 108;
+  if (len <= 64) return 92;
+  return 78;
+}
+function fitBoldStatementTitle(resolvedHtml: string, skeletonId: string, title: unknown): string {
+  if (skeletonId !== 'bold_statement_cover') return resolvedHtml;
+  const t = title == null ? '' : String(title);
+  const size = boldTitleSize(t);
+  if (size === 176) return resolvedHtml; // ya es el tamaño por defecto
+  // Reemplaza el font-size del <h1> (que trae 176px) por el calculado.
+  return resolvedHtml.replace(/(<h1[^>]*font-size:)176px/, '$1' + size + 'px');
+}
+
 // ── Logo en la slide de cierre (cta) ─────────────────────────────────
 // Inserta el logo de marca arriba centrado SOLO en la última slide (cta),
 // SOLO si hay logo_url y la variante es 'light' (en fondos oscuros el logo —
@@ -271,6 +295,9 @@ export default async function handler(req: any, res: any) {
     let resolvedHtml = fillTemplate(baseSkeleton, fields, tokens);
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
+    // 2b-bis. bold_statement_cover: ajustar tamaño del título para que no se
+    //         salga del lienzo con títulos largos.
+    resolvedHtml = fitBoldStatementTitle(resolvedHtml, skeletonMeta, (fields as any)?.title);
     // 2c. Logo de marca en la slide de cierre (cta), si procede.
     const logoResult = await injectCtaLogo(resolvedHtml, {
       skeletonId: skeletonMeta,
