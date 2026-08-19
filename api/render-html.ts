@@ -119,6 +119,92 @@ function dropEmptyListRows(skeletonHtml: string, fields: Record<string, unknown>
   return out;
 }
 
+// ── Checklists que llenan la slide (2026-08-19) ──────────────────────
+// Con menos de 5 items (tras dropEmptyListRows) las filas quedaban arriba y
+// pequeñas, dejando media slide vacía. Dos ajustes sobre el skeleton (antes
+// de resolver campos):
+//  1) El contenedor de filas (el <div> con flex-grow:1 que envuelve las
+//     {{check_N}}) se centra verticalmente si no lo estaba.
+//  2) Con 3 o menos filas, el texto de cada fila se agranda (x1.3, tope
+//     56px); con 4 filas, x1.15. Solo se tocan los <span> que envuelven a
+//     cada {{check_N}}: título, footer y checkbox no se ven afectados.
+// Defensivo: si algo no casa con el patrón, no se toca nada.
+function fitChecklist(skeletonHtml: string, fields: Record<string, unknown>): string {
+  const keyRe = /\{\{(check_\d+)\}\}/g;
+  const keys: string[] = [];
+  let km: RegExpExecArray | null;
+  while ((km = keyRe.exec(skeletonHtml))) keys.push(km[1]);
+  if (keys.length === 0) return skeletonHtml;
+  let out = skeletonHtml;
+
+  // 1) Centrado vertical del contenedor de filas.
+  const firstPos = out.indexOf('{{' + keys[0] + '}}');
+  if (firstPos !== -1) {
+    let search = firstPos;
+    while (search > 0) {
+      const divStart = out.lastIndexOf('<div', search - 1);
+      if (divStart === -1) break;
+      const tagEnd = out.indexOf('>', divStart);
+      if (tagEnd === -1 || tagEnd > firstPos) break;
+      const tag = out.slice(divStart, tagEnd);
+      if (tag.includes('flex-grow:1')) {
+        if (!tag.includes('justify-content')) {
+          const styleIdx = out.indexOf('style="', divStart);
+          if (styleIdx !== -1 && styleIdx < tagEnd) {
+            const insertAt = styleIdx + 'style="'.length;
+            out = out.slice(0, insertAt) + 'justify-content:center;' + out.slice(insertAt);
+          }
+        }
+        break;
+      }
+      search = divStart;
+    }
+  }
+
+  // 2) Escala del texto de fila según nº de filas con contenido.
+  const filled = keys.filter((k) => {
+    const v = (fields as any)?.[k];
+    return v != null && String(v).trim() !== '';
+  });
+  const factor = filled.length <= 3 ? 1.3 : filled.length === 4 ? 1.15 : 1;
+  if (factor === 1) return out;
+  for (const key of filled) {
+    const pos = out.indexOf('{{' + key + '}}');
+    if (pos === -1) continue;
+    const spanStart = out.lastIndexOf('<span', pos);
+    if (spanStart === -1) continue;
+    const tagEnd = out.indexOf('>', spanStart);
+    if (tagEnd === -1 || tagEnd > pos) continue;
+    const tag = out.slice(spanStart, tagEnd);
+    const upd = tag.replace(/font-size:(\d+)px/, (m0, n) => {
+      const size = Math.min(56, Math.round(parseInt(n, 10) * factor));
+      return 'font-size:' + size + 'px';
+    });
+    if (upd !== tag) out = out.slice(0, spanStart) + upd + out.slice(tagEnd);
+  }
+  return out;
+}
+
+// ── Marca duplicada en quotes (2026-08-19) ───────────────────────────
+// Cuando la atribución de la cita ES el propio negocio (cita de autor propio),
+// el footer {{brand_name}} duplicaba la marca en la misma slide. Si la
+// atribución normalizada coincide con el nombre de marca, se vacía el span
+// del {{brand_name}} (mismo mecanismo que cuando entra el logo en la cta).
+function normBrandText(s: unknown): string {
+  return (s == null ? '' : String(s)).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+function attributionDuplicatesBrand(fields: Record<string, unknown>, brandName: unknown): boolean {
+  const brand = normBrandText(brandName);
+  if (!brand) return false;
+  for (const k of ['attribution', 'author', 'source', 'quote_author']) {
+    const v = normBrandText((fields as any)?.[k]);
+    if (v && (v === brand || v.includes(brand))) return true;
+  }
+  return false;
+}
+
 // ── Bug 3: stat sin número ───────────────────────────────────────────
 // Algunos esqueletos `*_stat` reservan un <span> enorme para {{stat_number}}.
 // Si el agente no envía número (stat_number vacío), ese span queda vacío y
@@ -174,7 +260,7 @@ function fitBoldStatementTitle(resolvedHtml: string, skeletonId: string, title: 
 //     Satori no resuelve el ancho con left+right a la vez.
 //  2) El <img> usa width/height EXPLÍCITOS en el CSS (NO width:auto):
 //     con width:auto Satori inserta el <image> en el SVG pero NO lo rasteriza
-//     (la imagen sale invisible). Caja fija 360x96 + object-fit:contain ->
+//     (la imagen sale invisible). Caja fija + object-fit:contain ->
 //     el logo se pinta y conserva su proporción centrado en la caja.
 // El logo (PNG, normalmente transparente) se aplana sobre el fondo REAL de la
 // slide (detectRootBg) para que la zona transparente se funda con el fondo y no
@@ -335,9 +421,11 @@ async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; v
   const dataUri = await fetchLogoDataUri(logoUrl, bgHex);
   if (!dataUri) return { html: resolvedHtml, status: 'skip_logo_fetch_failed' }; // descarga falló -> nombre en texto
   // Ver restricciones de Satori arriba: left:0;width:1080px y <img> con dims fijas.
+  // Caja 480x170 (antes 360x96): los logos cuadrados quedaban diminutos al
+  // limitarlos a 96px de alto. object-fit:contain mantiene la proporción.
   const logoBlock =
-    '<div style="position:absolute;top:56px;left:0;width:1080px;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
-    '<img src="' + dataUri + '" width="360" height="96" style="display:flex;width:360px;height:96px;object-fit:contain;" />' +
+    '<div style="position:absolute;top:60px;left:0;width:1080px;display:flex;flex-direction:row;justify-content:center;align-items:center;">' +
+    '<img src="' + dataUri + '" width="480" height="170" style="display:flex;width:480px;height:170px;object-fit:contain;" />' +
     '</div>';
   const m = resolvedHtml.match(/<div[^>]*>/);
   if (!m) return { html: resolvedHtml, status: 'skip_no_root_div' };
@@ -404,10 +492,14 @@ export default async function handler(req: any, res: any) {
     //     al nombre en texto: lo vaciamos del esqueleto para no duplicar marca.
     const skeletonMeta = body?.meta?.skeleton_id || '';
     const willInsertLogo = /_cta$/.test(skeletonMeta) && variant !== 'dark' && !!(body?.brand?.logo_url);
-    const baseSkeleton = willInsertLogo ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
+    // Si la atribución de la cita es la propia marca, el footer {{brand_name}}
+    // duplicaría el nombre en la misma slide: se vacía igual que con el logo.
+    const attrDup = attributionDuplicatesBrand(fields, body?.brand?.name);
+    const baseSkeleton = (willInsertLogo || attrDup) ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
     // 2a-bis. Checklists con menos de 5 items: quitar las filas sin contenido
-    //         ANTES de resolver campos (si no, quedan checkboxes huérfanos).
-    const prunedSkeleton = dropEmptyListRows(baseSkeleton, fields);
+    //         ANTES de resolver campos (si no, quedan checkboxes huérfanos), y
+    //         centrar/agrandar las filas restantes para llenar la slide.
+    const prunedSkeleton = fitChecklist(dropEmptyListRows(baseSkeleton, fields), fields);
     let resolvedHtml = fillTemplate(prunedSkeleton, fields, tokens);
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
