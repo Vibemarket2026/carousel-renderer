@@ -30,6 +30,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { html as toVNode } from 'satori-html';
 import UPNG from 'upng-js';
+import * as JPEG from 'jpeg-js';
 import { deriveTokens, contrast, BrandColors, RecipeVariant, Tokens, BgRecipe } from '../lib/skeleton-tokens.js';
 import { loadBrandFonts } from '../lib/skeleton-fonts.js';
 
@@ -344,62 +345,111 @@ function detectRootBg(resolvedHtml: string, fallback: string): string {
 // sin calcular luminancia por imagen. El degradado deja respirar la foto en
 // la parte alta y protege la zona de texto (centro/abajo en los esqueletos
 // de quote/stat).
-const photoCache: Map<string, string> = new Map();
+// CAMBIO 2026-08-19 (fix timeout): la foto YA NO se incrusta como dataURI en
+// el HTML. Con JPEGs de ~600KB (Nano Banana) el parser de satori-html se
+// colgaba >120s con el atributo src gigante. Ahora satori renderiza la slide
+// con el fondo del root TRANSPARENTE + el velo como primer hijo, y la foto se
+// compone DESPUÉS a nivel de píxel en Node (jpeg-js/UPNG): decodificar,
+// escalar a cover, y alfa-componer el PNG de la slide encima. Coste total
+// ~2-4s para 1080x1350, sin tocar satori/resvg con strings enormes.
 
-async function fetchPhotoDataUri(url: string): Promise<string | null> {
-  const cached = photoCache.get(url);
-  if (cached !== undefined) return cached || null;
+// Descarga y decodifica la foto a RGBA ya escalada a cover (dw x dh).
+async function fetchPhotoRgba(url: string, dw: number, dh: number): Promise<Uint8Array | null> {
   try {
     const r = await fetch(url);
-    if (!r.ok) { photoCache.set(url, ''); return null; }
+    if (!r.ok) return null;
     const ct = (r.headers.get('content-type') || '').toLowerCase();
     const urlPath = url.split('?')[0].toLowerCase();
     const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > 8 * 1024 * 1024) { photoCache.set(url, ''); return null; } // >8MB: no
-    // webp no es fiable en Satori (mismo criterio que el logo)
-    if (ct.includes('webp') || urlPath.endsWith('.webp')) { photoCache.set(url, ''); return null; }
+    if (buf.length > 8 * 1024 * 1024) return null; // >8MB: no
+    let rgba: Uint8Array, sw: number, sh: number;
     const isPng = ct.includes('png') || urlPath.endsWith('.png');
-    let outBuf = buf;
-    let mime = 'image/jpeg';
+    const isJpeg = ct.includes('jpeg') || ct.includes('jpg') || urlPath.endsWith('.jpg') || urlPath.endsWith('.jpeg');
     if (isPng) {
-      // PNG puede traer alfa, que Satori no rasteriza bien: aplanar sobre blanco.
-      mime = 'image/png';
-      try { outBuf = flattenPngOverBg(buf, '#FFFFFF'); } catch { outBuf = buf; }
+      const dec = UPNG.decode(buf);
+      rgba = new Uint8Array(UPNG.toRGBA8(dec)[0]);
+      sw = dec.width; sh = dec.height;
+    } else if (isJpeg || !ct) {
+      // jpeg-js: decodificador JS puro (sin binarios nativos -> seguro en Vercel)
+      const dec = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 } as any);
+      rgba = dec.data as Uint8Array;
+      sw = dec.width; sh = dec.height;
+    } else {
+      return null; // webp u otros: no fiables aquí
     }
-    const dataUri = `data:${mime};base64,${outBuf.toString('base64')}`;
-    photoCache.set(url, dataUri);
-    return dataUri;
-  } catch { photoCache.set(url, ''); return null; }
+    return scaleCoverRgba(rgba, sw, sh, dw, dh);
+  } catch { return null; }
 }
 
-function injectPhotoBackground(
+// Escala RGBA a cover (recorte centrado + nearest). Para fondos soft-focus
+// que además van bajo un velo, nearest es indistinguible de bilinear.
+function scaleCoverRgba(src: Uint8Array, sw: number, sh: number, dw: number, dh: number): Uint8Array {
+  const scale = Math.max(dw / sw, dh / sh);
+  const cw = dw / scale, ch = dh / scale; // ventana de recorte en la fuente
+  const ox = (sw - cw) / 2, oy = (sh - ch) / 2;
+  const out = new Uint8Array(dw * dh * 4);
+  for (let y = 0; y < dh; y++) {
+    const sy = Math.min(sh - 1, Math.max(0, Math.floor(oy + (y + 0.5) / scale)));
+    const rowS = sy * sw, rowD = y * dw;
+    for (let x = 0; x < dw; x++) {
+      const sx = Math.min(sw - 1, Math.max(0, Math.floor(ox + (x + 0.5) / scale)));
+      const si = (rowS + sx) * 4, di = (rowD + x) * 4;
+      out[di] = src[si]; out[di + 1] = src[si + 1]; out[di + 2] = src[si + 2]; out[di + 3] = 255;
+    }
+  }
+  return out;
+}
+
+// Compone la slide (RGBA con alfa: root transparente) SOBRE la foto (opaca)
+// y devuelve el PNG final. Ambas capas ya están en dw x dh.
+function compositeSlideOverPhoto(slidePng: Buffer, photoRgba: Uint8Array, dw: number, dh: number): Buffer {
+  const dec = UPNG.decode(slidePng);
+  const fg = new Uint8Array(UPNG.toRGBA8(dec)[0]);
+  if (dec.width !== dw || dec.height !== dh) return slidePng; // dims raras: no tocar
+  for (let i = 0; i < fg.length; i += 4) {
+    const a = fg[i + 3] / 255;
+    if (a === 1) continue; // opaco: la slide manda tal cual
+    photoRgba[i] = Math.round(fg[i] * a + photoRgba[i] * (1 - a));
+    photoRgba[i + 1] = Math.round(fg[i + 1] * a + photoRgba[i + 1] * (1 - a));
+    photoRgba[i + 2] = Math.round(fg[i + 2] * a + photoRgba[i + 2] * (1 - a));
+  }
+  // Donde la slide es opaca, copiar directamente sus píxeles.
+  for (let i = 0; i < fg.length; i += 4) {
+    if (fg[i + 3] === 255) {
+      photoRgba[i] = fg[i]; photoRgba[i + 1] = fg[i + 1]; photoRgba[i + 2] = fg[i + 2];
+    }
+    photoRgba[i + 3] = 255;
+  }
+  const out = UPNG.encode([photoRgba.buffer as ArrayBuffer], dw, dh, 0); // lossless
+  return Buffer.from(out);
+}
+
+// Prepara el HTML para foto de fondo: root transparente + velo como primer
+// hijo. El velo se decide por el color REAL del texto del estilo:
+//   texto oscuro  -> velo blanco degradado (foto lavada, texto tinta)
+//   texto claro   -> velo oscuro degradado (foto en sombra, texto claro)
+// Así el contraste queda garantizado por construcción para CUALQUIER foto.
+function injectVeilForPhoto(
   resolvedHtml: string,
-  dataUri: string,
   tokens: Tokens,
   w: number,
   h: number
 ): { html: string; status: string } {
   const m = resolvedHtml.match(/<div[^>]*>/);
   if (!m) return { html: resolvedHtml, status: 'skip_no_root_div' };
-  // El velo se decide por el color REAL del texto del estilo (no por variant):
-  // cubre marcas con texto de color propio. Texto oscuro -> velo blanco.
   const ink = tokens['--text-title'] || '#1A1A1A';
   const darkText = contrast(ink, '#FFFFFF') >= contrast(ink, '#1A1A1A');
   const veil = darkText
     ? 'linear-gradient(to top, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.82) 55%, rgba(255,255,255,0.60) 100%)'
     : 'linear-gradient(to top, rgba(12,10,9,0.88) 0%, rgba(12,10,9,0.68) 55%, rgba(12,10,9,0.40) 100%)';
-  // Restricciones Satori: dims explícitas en el <img> (nada de width:auto) y
-  // contenedores absolute con width fija (no left+right).
-  const block =
-    '<div style="position:absolute;top:0;left:0;width:' + w + 'px;height:' + h + 'px;display:flex;">' +
-    '<img src="' + dataUri + '" width="' + w + '" height="' + h + '" style="display:flex;width:' + w + 'px;height:' + h + 'px;object-fit:cover;" />' +
-    '</div>' +
+  // Root transparente: la foto se verá a través en la composición posterior.
+  const rootTag = m[0];
+  const newRootTag = rootTag.replace(/background:[^;"']+/, 'background:transparent');
+  const veilBlock =
     '<div style="position:absolute;top:0;left:0;width:' + w + 'px;height:' + h + 'px;display:flex;background:' + veil + ';"></div>';
-  const insertAt = (m.index || 0) + m[0].length;
-  return {
-    html: resolvedHtml.slice(0, insertAt) + block + resolvedHtml.slice(insertAt),
-    status: darkText ? 'inserted_light_veil' : 'inserted_dark_veil',
-  };
+  const insertAt = (m.index || 0) + rootTag.length;
+  const html = newRootTag + veilBlock + resolvedHtml.slice(insertAt);
+  return { html, status: darkText ? 'inserted_light_veil' : 'inserted_dark_veil' };
 }
 
 // Cuando vamos a poner el logo en la cta, el {{brand_name}} en texto que el
@@ -516,14 +566,18 @@ export default async function handler(req: any, res: any) {
     resolvedHtml = logoResult.html;
 
     // 2d. Fondo fotográfico con velo adaptativo (si n8n lo pide).
+    // La foto se descarga y decodifica AQUÍ (antes de satori): solo si está
+    // disponible se pone el root transparente + velo. Si falla, la slide se
+    // renderiza plana con su fondo normal: nunca rompe.
     let backgroundStatus = 'none';
+    let photoRgba: Uint8Array | null = null;
     const backgroundImage = (body?.background_image && typeof body.background_image === 'object' && body.background_image.url)
       ? { url: String(body.background_image.url) }
       : null;
     if (backgroundImage) {
-      const photoUri = await fetchPhotoDataUri(backgroundImage.url);
-      if (photoUri) {
-        const bgResult = injectPhotoBackground(resolvedHtml, photoUri, tokens, width, height);
+      photoRgba = await fetchPhotoRgba(backgroundImage.url, width, height);
+      if (photoRgba) {
+        const bgResult = injectVeilForPhoto(resolvedHtml, tokens, width, height);
         resolvedHtml = bgResult.html;
         backgroundStatus = bgResult.status;
       } else {
@@ -547,7 +601,15 @@ export default async function handler(req: any, res: any) {
     });
 
     // 6. SVG -> PNG.
-    const png = new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng();
+    let png: Buffer = Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng());
+    // 6b. Si hay fondo fotográfico: componer la slide (root transparente +
+    //     velo) SOBRE la foto, a nivel de píxel. Si algo falla, la slide sale
+    //     sin foto (con el velo sobre transparente aplanado a blanco por el
+    //     encode) antes que romper el render.
+    if (photoRgba) {
+      try { png = compositeSlideOverPhoto(png, photoRgba, width, height); }
+      catch (e) { backgroundStatus = 'skip_composite_failed'; }
+    }
 
     return res.status(200).json({
       success: true,
