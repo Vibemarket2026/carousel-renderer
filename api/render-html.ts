@@ -452,6 +452,27 @@ function injectVeilForPhoto(
   return { html, status: darkText ? 'inserted_light_veil' : 'inserted_dark_veil' };
 }
 
+// ── Tarjetas/superficies opacas con foto de fondo (2026-08-19) ──────
+// Cuando la slide lleva foto, cualquier panel opaco del esqueleto (la tarjeta
+// de --accent-soft, la superficie de --surface, el wash decorativo de
+// --accent-tint y el fondo de --bg) tapa la foto y la deja reducida a un marco.
+// Con foto esos rellenos se vacían: la caja sigue existiendo (padding, radio,
+// flex) así que el layout NO cambia, pero la foto se ve a través. El contraste
+// del texto lo sigue garantizando el velo adaptativo, no la tarjeta.
+// NO se toca --accent: barras, puntos y pills son elementos pequeños de marca
+// que sobre el velo siguen leyéndose y son lo que mantiene la identidad.
+// Se aplica sobre el esqueleto CRUDO, antes de resolver los tokens a hex.
+const PHOTO_STRIPPED_TOKENS = ['--bg', '--surface', '--accent-soft', '--accent-tint'];
+
+function stripPanelBackgrounds(skeletonHtml: string): string {
+  let out = skeletonHtml;
+  for (const tok of PHOTO_STRIPPED_TOKENS) {
+    const re = new RegExp('background(?:-color)?\\s*:\\s*var\\(' + tok + '\\)\\s*;?', 'g');
+    out = out.replace(re, 'background:transparent;');
+  }
+  return out;
+}
+
 // Cuando vamos a poner el logo en la cta, el {{brand_name}} en texto que el
 // esqueleto pinta arriba sobra (duplicaría la marca). Vaciamos el contenido del
 // <span> que contiene {{brand_name}} (se hace sobre el skeleton CRUDO, antes de
@@ -537,6 +558,19 @@ export default async function handler(req: any, res: any) {
     tokens['--font-display'] = fontHeading;
     tokens['--font-body'] = fontBody;
 
+    // 1b. Foto de fondo (si n8n la pide): se descarga ANTES de construir el
+    //     HTML porque su presencia decide si los paneles opacos del esqueleto
+    //     (tarjetas, superficies, washes) se vacían para dejar ver la foto.
+    let backgroundStatus = 'none';
+    let photoRgba: Uint8Array | null = null;
+    const backgroundImage = (body?.background_image && typeof body.background_image === 'object' && body.background_image.url)
+      ? { url: String(body.background_image.url) }
+      : null;
+    if (backgroundImage) {
+      photoRgba = await fetchPhotoRgba(backgroundImage.url, width, height);
+      if (!photoRgba) backgroundStatus = 'skip_fetch_failed'; // se renderiza plano: nunca rompe
+    }
+
     // 2. Inyectar contenido + tokens en el esqueleto.
     // 2a. Si esta slide es cta, light y la marca tiene logo, el logo sustituirá
     //     al nombre en texto: lo vaciamos del esqueleto para no duplicar marca.
@@ -545,7 +579,9 @@ export default async function handler(req: any, res: any) {
     // Si la atribución de la cita es la propia marca, el footer {{brand_name}}
     // duplicaría el nombre en la misma slide: se vacía igual que con el logo.
     const attrDup = attributionDuplicatesBrand(fields, body?.brand?.name);
-    const baseSkeleton = (willInsertLogo || attrDup) ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
+    const namedSkeleton = (willInsertLogo || attrDup) ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
+    // Con foto real disponible: vaciar los paneles opacos para que la foto se vea.
+    const baseSkeleton = photoRgba ? stripPanelBackgrounds(namedSkeleton) : namedSkeleton;
     // 2a-bis. Checklists con menos de 5 items: quitar las filas sin contenido
     //         ANTES de resolver campos (si no, quedan checkboxes huérfanos), y
     //         centrar/agrandar las filas restantes para llenar la slide.
@@ -565,24 +601,14 @@ export default async function handler(req: any, res: any) {
     });
     resolvedHtml = logoResult.html;
 
-    // 2d. Fondo fotográfico con velo adaptativo (si n8n lo pide).
-    // La foto se descarga y decodifica AQUÍ (antes de satori): solo si está
-    // disponible se pone el root transparente + velo. Si falla, la slide se
-    // renderiza plana con su fondo normal: nunca rompe.
-    let backgroundStatus = 'none';
-    let photoRgba: Uint8Array | null = null;
-    const backgroundImage = (body?.background_image && typeof body.background_image === 'object' && body.background_image.url)
-      ? { url: String(body.background_image.url) }
-      : null;
-    if (backgroundImage) {
-      photoRgba = await fetchPhotoRgba(backgroundImage.url, width, height);
-      if (photoRgba) {
-        const bgResult = injectVeilForPhoto(resolvedHtml, tokens, width, height);
-        resolvedHtml = bgResult.html;
-        backgroundStatus = bgResult.status;
-      } else {
-        backgroundStatus = 'skip_fetch_failed'; // se renderiza plano: nunca rompe
-      }
+    // 2d. Fondo fotográfico: la foto ya se descargó arriba (antes de construir
+    //     el HTML, porque decide si se vacían las tarjetas). Aquí solo queda
+    //     poner el root transparente + velo. Si la descarga falló, la slide se
+    //     renderiza plana con su fondo normal: nunca rompe.
+    if (photoRgba) {
+      const bgResult = injectVeilForPhoto(resolvedHtml, tokens, width, height);
+      resolvedHtml = bgResult.html;
+      backgroundStatus = bgResult.status;
     }
 
     // 3. HTML -> vnode -> normalizar display:flex.
