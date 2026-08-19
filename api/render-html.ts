@@ -75,6 +75,50 @@ function fillTemplate(htmlTpl: string, fields: Record<string, unknown>, tokens: 
   return out;
 }
 
+// ── Filas de lista vacías (checklists de 3-5 items) ──────────────────
+// Los esqueletos *_checklist traen 5 filas fijas {{check_1}}..{{check_5}}.
+// Cuando el agente manda menos items, las filas sobrantes se pintaban con el
+// checkbox vacío ("5 bullets con 3 textos"). Antes de resolver campos,
+// eliminamos del skeleton la FILA entera (el <div> contenedor más interno del
+// placeholder) de cada campo de lista vacío o ausente. Se hace con un scan
+// balanceado de <div>/<\/div> (nada de regex anidados: si el HTML no cuadra,
+// no se toca nada). Genérico para check_N / item_N / step_N / tip_N / point_N.
+function removeEnclosingDiv(html: string, pos: number): string {
+  const re = /<div\b[^>]*>|<\/div>/g;
+  const stack: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    if (m[0][1] === '/') {
+      const openStart = stack.pop();
+      if (openStart == null) return html; // desbalanceado: no tocar
+      const end = m.index + m[0].length;
+      if (openStart < pos && pos < end) {
+        // Primer cierre que envuelve pos = div más interno que lo contiene.
+        return html.slice(0, openStart) + html.slice(end);
+      }
+    } else {
+      stack.push(m.index);
+    }
+  }
+  return html;
+}
+
+function dropEmptyListRows(skeletonHtml: string, fields: Record<string, unknown>): string {
+  let out = skeletonHtml;
+  const keys = new Set<string>();
+  const re = /\{\{((?:check|item|step|tip|point)_\d+)\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(skeletonHtml))) keys.add(m[1]);
+  for (const key of keys) {
+    const v = (fields as any)?.[key];
+    if (v != null && String(v).trim() !== '') continue;
+    const pos = out.indexOf('{{' + key + '}}');
+    if (pos === -1) continue;
+    out = removeEnclosingDiv(out, pos);
+  }
+  return out;
+}
+
 // ── Bug 3: stat sin número ───────────────────────────────────────────
 // Algunos esqueletos `*_stat` reservan un <span> enorme para {{stat_number}}.
 // Si el agente no envía número (stat_number vacío), ese span queda vacío y
@@ -205,7 +249,7 @@ function detectRootBg(resolvedHtml: string, fallback: string): string {
 
 // ── Fondo fotográfico con velo adaptativo (2026-08-19) ──────────────
 // body.background_image = { url }. Lo resuelve n8n (foto real de
-// brand_media_library o, en el futuro, imagen generada). La foto se pinta
+// brand_media_library o imagen generada photo_ai). La foto se pinta
 // DEBAJO de todo el contenido y encima va un VELO cuyo color depende del
 // color REAL del texto del estilo (tokens ya derivados):
 //   texto oscuro  -> velo blanco degradado (foto lavada, texto tinta)
@@ -361,7 +405,10 @@ export default async function handler(req: any, res: any) {
     const skeletonMeta = body?.meta?.skeleton_id || '';
     const willInsertLogo = /_cta$/.test(skeletonMeta) && variant !== 'dark' && !!(body?.brand?.logo_url);
     const baseSkeleton = willInsertLogo ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
-    let resolvedHtml = fillTemplate(baseSkeleton, fields, tokens);
+    // 2a-bis. Checklists con menos de 5 items: quitar las filas sin contenido
+    //         ANTES de resolver campos (si no, quedan checkboxes huérfanos).
+    const prunedSkeleton = dropEmptyListRows(baseSkeleton, fields);
+    let resolvedHtml = fillTemplate(prunedSkeleton, fields, tokens);
     // 2b. Si es un stat sin número, colapsar el hueco del número gigante.
     resolvedHtml = dropEmptyStatNumber(resolvedHtml, fields);
     // 2b-bis. bold_statement_cover: ajustar tamaño del título para que no se
