@@ -50,6 +50,12 @@ function mix(hex: string, target: string, t: number): string {
   return rgbToHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
 }
 
+// Croma aproximada (0..1): distingue colores "de verdad" de negros/grises/blancos.
+function chromaOf(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+}
+
 // El color de texto (blanco o casi-negro) que mejor contrasta sobre un fondo.
 function bestTextOn(bg: string): string {
   return contrast(bg, '#FFFFFF') >= contrast(bg, '#1A1A1A') ? '#FFFFFF' : '#1A1A1A';
@@ -111,18 +117,30 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
   const secondaryRaw = (brand.color_secondary && brand.color_secondary.trim()) || '';
   const dark = variant === 'dark';
 
+  // El ACENTO visual es el color CROMÁTICO de la marca. Si el primario es
+  // prácticamente acromático (negro/blanco/gris — típico en marcas premium
+  // negro+dorado, como Pedro Quiromasajista) y el secundario sí tiene croma,
+  // el acento real de la marca es el secundario: así barras, pills, checks y
+  // números salen en el color de marca en vez de en negro/gris plano. Los
+  // textos siguen gobernados por los tokens de texto con contraste, no por esto.
+  let accent = primary;
+  if (chromaOf(primary) < 0.10 && secondaryRaw && chromaOf(secondaryRaw) >= 0.18) {
+    accent = secondaryRaw;
+  }
+
   // Fondo: en dark, el oscuro de siempre. En light, derivado del estilo+marca
-  // (con fallback al crema si el estilo no trae receta).
-  const bg = dark ? '#14110F' : computeStyleBg(primary, bgRecipe, '#1F2A24');
+  // (con fallback al crema si el estilo no trae receta). Se tinta con el ACENTO
+  // efectivo: si el primario es negro, el tinte de marca útil es el del acento.
+  const bg = dark ? '#14110F' : computeStyleBg(accent, bgRecipe, '#1F2A24');
   const surface = dark ? '#1E1A17' : '#FFFFFF';
-  const accent = primary;
 
   // accent-soft: versión suave del primario. Si la marca da secundario y contrasta
   // poco con el primario, derivamos uno desde el primario para asegurar separación.
-  let accentSoft = secondaryRaw || (dark ? mix(primary, '#000000', 0.55) : mix(primary, '#FFFFFF', 0.78));
-  // Si el secundario de marca está demasiado cerca del accent o del bg, derivamos.
+  let accentSoft = secondaryRaw || (dark ? mix(accent, '#000000', 0.55) : mix(accent, '#FFFFFF', 0.78));
+  // Si el secundario de marca está demasiado cerca del accent o del bg (incluido
+  // el caso en que el secundario ES ahora el accent), derivamos del accent.
   if (contrast(accentSoft, accent) < 1.15 || contrast(accentSoft, bg) < 1.06) {
-    accentSoft = dark ? mix(primary, '#000000', 0.55) : mix(primary, '#FFFFFF', 0.78);
+    accentSoft = dark ? mix(accent, '#000000', 0.55) : mix(accent, '#FFFFFF', 0.78);
   }
 
   // accent-tint: tinte suave del primario para formas decorativas grandes de
@@ -132,13 +150,13 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
   // lograr una diferencia visible. En dark se mantiene el cálculo anterior.
   let accentTint: string;
   if (dark) {
-    accentTint = mix(primary, '#000000', 0.62);
+    accentTint = mix(accent, '#000000', 0.62);
   } else {
     let t = 0.86;
-    accentTint = mix(primary, '#FFFFFF', t);
+    accentTint = mix(accent, '#FFFFFF', t);
     let tg = 0;
     while (contrast(accentTint, bg) < 1.12 && t > 0.55 && tg < 20) {
-      t -= 0.03; accentTint = mix(primary, '#FFFFFF', t); tg++;
+      t -= 0.03; accentTint = mix(accent, '#FFFFFF', t); tg++;
     }
   }
 
