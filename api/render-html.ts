@@ -481,6 +481,39 @@ function stripBrandNameSpan(skeletonHtml: string): string {
   return skeletonHtml.replace(/(<span[^>]*>)([^<]*\{\{brand_name\}\}[^<]*)(<\/span>)/g, '$1$3');
 }
 
+// ── Filete de cabecera que cruza el logo (2026-08-26) ────────────────
+// Varios esqueletos _cta pintan el {{brand_name}} dentro de un div cabecera
+// con un filete decorativo (border-bottom:1px solid var(--hairline), p.ej.
+// editorial_mono_cta). Cuando entra el logo (absolute, top:60px, caja 170px
+// de alto), ese trazo queda cruzando el logo por en medio. Cuando vamos a
+// insertar el logo, además de vaciar el span, eliminamos el border-top/bottom
+// del div cabecera más cercano que contiene el {{brand_name}}.
+// IMPORTANTE: se aplica ANTES de stripBrandNameSpan (necesita encontrar el
+// marcador). Defensivo: si el patrón no casa, no se toca nada. No afecta a
+// border-radius ni a border-left/right (la regex solo casa border, border-top
+// y border-bottom).
+function stripHeaderRule(skeletonHtml: string): string {
+  const pos = skeletonHtml.indexOf('{{brand_name}}');
+  if (pos === -1) return skeletonHtml;
+  let out = skeletonHtml;
+  let search = pos;
+  for (let depth = 0; depth < 3; depth++) {
+    const divStart = out.lastIndexOf('<div', search - 1);
+    if (divStart === -1) break;
+    const tagEnd = out.indexOf('>', divStart);
+    if (tagEnd === -1) break;
+    if (tagEnd > pos) { search = divStart; continue; }
+    const tag = out.slice(divStart, tagEnd);
+    if (/border(?:-top|-bottom)?\s*:/.test(tag)) {
+      const upd = tag.replace(/border(?:-top|-bottom)?\s*:[^;"']+;?/g, '');
+      out = out.slice(0, divStart) + upd + out.slice(tagEnd);
+      break;
+    }
+    search = divStart;
+  }
+  return out;
+}
+
 async function injectCtaLogo(resolvedHtml: string, opts: { skeletonId: string; variant: string; logoUrl?: string | null; fallbackBg: string }): Promise<{ html: string; status: string }> {
   const { skeletonId, variant, logoUrl, fallbackBg } = opts;
   const isCta = typeof skeletonId === 'string' && /_cta$/.test(skeletonId);
@@ -574,12 +607,17 @@ export default async function handler(req: any, res: any) {
     // 2. Inyectar contenido + tokens en el esqueleto.
     // 2a. Si esta slide es cta, light y la marca tiene logo, el logo sustituirá
     //     al nombre en texto: lo vaciamos del esqueleto para no duplicar marca.
+    //     Además se elimina el filete (border-top/bottom) del div cabecera que
+    //     contenía el {{brand_name}}: ese trazo quedaba cruzando el logo.
+    //     stripHeaderRule va ANTES de stripBrandNameSpan porque necesita
+    //     localizar el marcador {{brand_name}} en el esqueleto crudo.
     const skeletonMeta = body?.meta?.skeleton_id || '';
     const willInsertLogo = /_cta$/.test(skeletonMeta) && variant !== 'dark' && !!(body?.brand?.logo_url);
     // Si la atribución de la cita es la propia marca, el footer {{brand_name}}
     // duplicaría el nombre en la misma slide: se vacía igual que con el logo.
     const attrDup = attributionDuplicatesBrand(fields, body?.brand?.name);
-    const namedSkeleton = (willInsertLogo || attrDup) ? stripBrandNameSpan(skeletonHtml) : skeletonHtml;
+    const preSkeleton = willInsertLogo ? stripHeaderRule(skeletonHtml) : skeletonHtml;
+    const namedSkeleton = (willInsertLogo || attrDup) ? stripBrandNameSpan(preSkeleton) : preSkeleton;
     // Con foto real disponible: vaciar los paneles opacos para que la foto se vea.
     const baseSkeleton = photoRgba ? stripPanelBackgrounds(namedSkeleton) : namedSkeleton;
     // 2a-bis. Checklists con menos de 5 items: quitar las filas sin contenido
