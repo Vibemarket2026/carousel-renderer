@@ -355,24 +355,27 @@ function detectRootBg(resolvedHtml: string, fallback: string): string {
 // compone DESPUÉS a nivel de píxel en Node (jpeg-js/UPNG): decodificar,
 // escalar a cover, y alfa-componer el PNG de la slide encima. Coste total
 // ~2-4s para 1080x1350, sin tocar satori/resvg con strings enormes.
+// FIX 2026-08-27: el tipo de imagen se detecta por BYTES MÁGICOS, no por
+// content-type ni extensión: el nodo de n8n sube JPEGs de Gemini etiquetados
+// como .png/image/png y UPNG reventaba (portada sin fondo).
 
 // Descarga y decodifica la foto a RGBA ya escalada a cover (dw x dh).
 async function fetchPhotoRgba(url: string, dw: number, dh: number): Promise<Uint8Array | null> {
   try {
     const r = await fetch(url);
     if (!r.ok) return null;
-    const ct = (r.headers.get('content-type') || '').toLowerCase();
-    const urlPath = url.split('?')[0].toLowerCase();
     const buf = Buffer.from(await r.arrayBuffer());
     if (buf.length > 8 * 1024 * 1024) return null; // >8MB: no
+    if (buf.length < 12) return null;
     let rgba: Uint8Array, sw: number, sh: number;
-    const isPng = ct.includes('png') || urlPath.endsWith('.png');
-    const isJpeg = ct.includes('jpeg') || ct.includes('jpg') || urlPath.endsWith('.jpg') || urlPath.endsWith('.jpeg');
-    if (isPng) {
+    // Bytes mágicos: PNG = 89 50 4E 47, JPEG = FF D8 FF. Las etiquetas mienten.
+    const isPngMagic = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    const isJpegMagic = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    if (isPngMagic) {
       const dec = UPNG.decode(buf);
       rgba = new Uint8Array(UPNG.toRGBA8(dec)[0]);
       sw = dec.width; sh = dec.height;
-    } else if (isJpeg || !ct) {
+    } else if (isJpegMagic) {
       // jpeg-js: decodificador JS puro (sin binarios nativos -> seguro en Vercel)
       const dec = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 } as any);
       rgba = dec.data as Uint8Array;
