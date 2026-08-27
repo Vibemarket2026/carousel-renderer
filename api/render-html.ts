@@ -22,6 +22,7 @@
 //     "font_heading": "Instrument Serif", "font_body": "Inter", "name": "..."
 //   },
 //   "variant": "light" | "dark",                          // del estilo (global_rules.variant)
+//   "background_image": { "url": "...", "veil": "auto|scrim_bottom|scrim_top|none" }, // opcional
 //   "output": { "width": 1080, "height": 1350 },          // opcional
 //   "meta": { "post_id": "...", "slide_number": 2 }        // opcional, passthrough
 // }
@@ -335,16 +336,18 @@ function detectRootBg(resolvedHtml: string, fallback: string): string {
 }
 
 // ── Fondo fotográfico con velo adaptativo (2026-08-19) ──────────────
-// body.background_image = { url }. Lo resuelve n8n (foto real de
+// body.background_image = { url, veil? }. Lo resuelve n8n (foto real de
 // brand_media_library o imagen generada photo_ai). La foto se pinta
-// DEBAJO de todo el contenido y encima va un VELO cuyo color depende del
-// color REAL del texto del estilo (tokens ya derivados):
-//   texto oscuro  -> velo blanco degradado (foto lavada, texto tinta)
-//   texto claro   -> velo oscuro degradado (foto en sombra, texto claro)
-// Así el contraste queda garantizado por construcción para CUALQUIER foto,
-// sin calcular luminancia por imagen. El degradado deja respirar la foto en
-// la parte alta y protege la zona de texto (centro/abajo en los esqueletos
-// de quote/stat).
+// DEBAJO de todo el contenido.
+// MODOS DE VELO (2026-08-27, portadas ruta A):
+//   "auto" (default, comportamiento histórico): velo global adaptativo según
+//     el color de texto del estilo (blanco degradado para texto tinta, oscuro
+//     para texto claro). Para slides text-heavy (quotes, stats) donde la foto
+//     es ambiente.
+//   "scrim_bottom" / "scrim_top": scrim LOCAL oscuro solo en la zona de texto;
+//     la foto respira en el resto. Para portadas con texto blanco en esa zona.
+//   "none": sin velo; la legibilidad la garantiza el propio tratamiento
+//     (tarjeta opaca, sombra dura). Para portadas donde la foto es la estrella.
 // CAMBIO 2026-08-19 (fix timeout): la foto YA NO se incrusta como dataURI en
 // el HTML. Con JPEGs de ~600KB (Nano Banana) el parser de satori-html se
 // colgaba >120s con el atributo src gigante. Ahora satori renderiza la slide
@@ -424,32 +427,45 @@ function compositeSlideOverPhoto(slidePng: Buffer, photoRgba: Uint8Array, dw: nu
   return Buffer.from(out);
 }
 
-// Prepara el HTML para foto de fondo: root transparente + velo como primer
-// hijo. El velo se decide por el color REAL del texto del estilo:
-//   texto oscuro  -> velo blanco degradado (foto lavada, texto tinta)
-//   texto claro   -> velo oscuro degradado (foto en sombra, texto claro)
-// Así el contraste queda garantizado por construcción para CUALQUIER foto.
+// Prepara el HTML para foto de fondo: root transparente + velo/scrim como
+// primer hijo según el modo (ver MODOS DE VELO arriba).
 function injectVeilForPhoto(
   resolvedHtml: string,
   tokens: Tokens,
   w: number,
-  h: number
+  h: number,
+  veilMode: string
 ): { html: string; status: string } {
   const m = resolvedHtml.match(/<div[^>]*>/);
   if (!m) return { html: resolvedHtml, status: 'skip_no_root_div' };
-  const ink = tokens['--text-title'] || '#1A1A1A';
-  const darkText = contrast(ink, '#FFFFFF') >= contrast(ink, '#1A1A1A');
-  const veil = darkText
-    ? 'linear-gradient(to top, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.82) 55%, rgba(255,255,255,0.60) 100%)'
-    : 'linear-gradient(to top, rgba(12,10,9,0.88) 0%, rgba(12,10,9,0.68) 55%, rgba(12,10,9,0.40) 100%)';
-  // Root transparente: la foto se verá a través en la composición posterior.
   const rootTag = m[0];
   const newRootTag = rootTag.replace(/background:[^;"']+/, 'background:transparent');
+  const insertAt = (m.index || 0) + rootTag.length;
+  if (veilMode === 'none') {
+    // Portada con la foto como estrella: la legibilidad la garantiza el propio
+    // tratamiento (tarjeta opaca, sombra dura). Solo root transparente.
+    return { html: newRootTag + resolvedHtml.slice(insertAt), status: 'no_veil' };
+  }
+  let veil: string;
+  let status: string;
+  if (veilMode === 'scrim_bottom' || veilMode === 'scrim_top') {
+    // Scrim LOCAL oscuro: protege solo la zona de texto (blanca) y deja
+    // respirar la foto en el resto del encuadre.
+    const dir = veilMode === 'scrim_bottom' ? 'to top' : 'to bottom';
+    veil = 'linear-gradient(' + dir + ', rgba(10,9,12,0.82) 0%, rgba(10,9,12,0.55) 28%, rgba(10,9,12,0.18) 48%, rgba(0,0,0,0) 62%)';
+    status = 'inserted_' + veilMode;
+  } else {
+    const ink = tokens['--text-title'] || '#1A1A1A';
+    const darkText = contrast(ink, '#FFFFFF') >= contrast(ink, '#1A1A1A');
+    veil = darkText
+      ? 'linear-gradient(to top, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.82) 55%, rgba(255,255,255,0.60) 100%)'
+      : 'linear-gradient(to top, rgba(12,10,9,0.88) 0%, rgba(12,10,9,0.68) 55%, rgba(12,10,9,0.40) 100%)';
+    status = darkText ? 'inserted_light_veil' : 'inserted_dark_veil';
+  }
   const veilBlock =
     '<div style="position:absolute;top:0;left:0;width:' + w + 'px;height:' + h + 'px;display:flex;background:' + veil + ';"></div>';
-  const insertAt = (m.index || 0) + rootTag.length;
   const html = newRootTag + veilBlock + resolvedHtml.slice(insertAt);
-  return { html, status: darkText ? 'inserted_light_veil' : 'inserted_dark_veil' };
+  return { html, status };
 }
 
 // ── Tarjetas/superficies opacas con foto de fondo (2026-08-19) ──────
@@ -461,6 +477,8 @@ function injectVeilForPhoto(
 // del texto lo sigue garantizando el velo adaptativo, no la tarjeta.
 // NO se toca --accent: barras, puntos y pills son elementos pequeños de marca
 // que sobre el velo siguen leyéndose y son lo que mantiene la identidad.
+// NOTA PORTADAS: los tratamientos cover_a que necesitan tarjeta OPACA usan
+// colores literales (#FFFFFF, rgba(...)), que NO se vacían aquí a propósito.
 // Se aplica sobre el esqueleto CRUDO, antes de resolver los tokens a hex.
 const PHOTO_STRIPPED_TOKENS = ['--bg', '--surface', '--accent-soft', '--accent-tint'];
 
@@ -597,7 +615,7 @@ export default async function handler(req: any, res: any) {
     let backgroundStatus = 'none';
     let photoRgba: Uint8Array | null = null;
     const backgroundImage = (body?.background_image && typeof body.background_image === 'object' && body.background_image.url)
-      ? { url: String(body.background_image.url) }
+      ? { url: String(body.background_image.url), veil: String(body.background_image.veil || 'auto') }
       : null;
     if (backgroundImage) {
       photoRgba = await fetchPhotoRgba(backgroundImage.url, width, height);
@@ -641,10 +659,10 @@ export default async function handler(req: any, res: any) {
 
     // 2d. Fondo fotográfico: la foto ya se descargó arriba (antes de construir
     //     el HTML, porque decide si se vacían las tarjetas). Aquí solo queda
-    //     poner el root transparente + velo. Si la descarga falló, la slide se
-    //     renderiza plana con su fondo normal: nunca rompe.
-    if (photoRgba) {
-      const bgResult = injectVeilForPhoto(resolvedHtml, tokens, width, height);
+    //     poner el root transparente + velo/scrim según el modo. Si la descarga
+    //     falló, la slide se renderiza plana con su fondo normal: nunca rompe.
+    if (photoRgba && backgroundImage) {
+      const bgResult = injectVeilForPhoto(resolvedHtml, tokens, width, height, backgroundImage.veil);
       resolvedHtml = bgResult.html;
       backgroundStatus = bgResult.status;
     }
@@ -680,7 +698,7 @@ export default async function handler(req: any, res: any) {
       image_base64: png.toString('base64'),
       resolved_tokens: tokens,           // para depurar contraste/colores
       logo_status: logoResult.status,    // diagnóstico: inserted | skip_* (por qué no se puso el logo)
-      background_status: backgroundStatus, // fondo foto: none | inserted_light_veil | inserted_dark_veil | skip_*
+      background_status: backgroundStatus, // fondo foto: none | no_veil | inserted_* | skip_*
       dimensions: { width, height },
       meta: body?.meta || null,          // passthrough (post_id, slide_number…)
       render_time_ms: Date.now() - startTime,
