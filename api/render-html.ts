@@ -22,7 +22,8 @@
 //     "font_heading": "Instrument Serif", "font_body": "Inter", "name": "..."
 //   },
 //   "variant": "light" | "dark",                          // del estilo (global_rules.variant)
-//   "background_image": { "url": "...", "veil": "auto|scrim_bottom|scrim_top|none" }, // opcional
+//   "background_image": { "url": "...", "veil": "auto|scrim_bottom|scrim_top|none|photo_graded",
+//                          "grade": { lo?, hi?, gamma?, sat?, tint_brand? } }, // opcional
 //   "output": { "width": 1080, "height": 1350 },          // opcional
 //   "meta": { "post_id": "...", "slide_number": 2 }        // opcional, passthrough
 // }
@@ -348,6 +349,9 @@ function detectRootBg(resolvedHtml: string, fallback: string): string {
 //     la foto respira en el resto. Para portadas con texto blanco en esa zona.
 //   "none": sin velo; la legibilidad la garantiza el propio tratamiento
 //     (tarjeta opaca, sombra dura). Para portadas donde la foto es la estrella.
+//   "photo_graded" (2026-08-28): sin velo; la foto se NORMALIZA a una banda de
+//     luminancia conocida con duotono de paleta (ver gradePhoto). Requiere
+//     variant dark. Es el modo por defecto para piezas con foto desde 08-2026.
 // CAMBIO 2026-08-19 (fix timeout): la foto YA NO se incrusta como dataURI en
 // el HTML. Con JPEGs de ~600KB (Nano Banana) el parser de satori-html se
 // colgaba >120s con el atributo src gigante. Ahora satori renderiza la slide
@@ -408,6 +412,57 @@ function scaleCoverRgba(src: Uint8Array, sw: number, sh: number, dw: number, dh:
 
 // Compone la slide (RGBA con alfa: root transparente) SOBRE la foto (opaca)
 // y devuelve el PNG final. Ambas capas ya están en dw x dh.
+// ── Normalizacion fotografica (modo "photo_graded", 2026-08-28) ─────
+// En vez de tapar la foto con un velo, se NORMALIZA: la luminancia se remapea
+// a una banda [lo, hi] conocida y se tinta en duotono hacia la paleta. Asi el
+// contraste del texto es DETERMINISTA aunque Nano Banana devuelva una foto
+// clara, oscura o abigarrada, y la foto sigue leyendose como foto (a
+// diferencia del velo auto, que la reduce a fantasmas). Medido con el preset
+// por defecto: pixel mas claro posible ~#565266 -> contraste con texto blanco
+// >= 7:1 (AAA). Requiere SIEMPRE variant dark en la request (texto claro).
+// El preset viene en background_image.grade (n8n lo saca de
+// carousel_styles.global_rules.photo_grade); tint_brand=true deriva el duotono
+// del color primario de la marca en vez de un gris neutro.
+interface GradeOpts { lo: number; hi: number; gamma: number; sat: number;
+  shadow: [number, number, number]; highlight: [number, number, number]; }
+
+function resolveGradeOpts(raw: any, brandPrimary: string): GradeOpts {
+  const g = raw && typeof raw === 'object' ? raw : {};
+  let shadow: [number, number, number] = Array.isArray(g.shadow) && g.shadow.length === 3 ? g.shadow : [12, 10, 18];
+  let highlight: [number, number, number] = Array.isArray(g.highlight) && g.highlight.length === 3 ? g.highlight : [235, 232, 242];
+  if (g.tint_brand) {
+    const [pr, pg, pb] = hexToRgbTuple(brandPrimary);
+    shadow = [Math.round(pr * 0.16), Math.round(pg * 0.16), Math.round(pb * 0.18)];
+    highlight = [Math.round(255 * 0.78 + pr * 0.22), Math.round(255 * 0.78 + pg * 0.22), Math.round(255 * 0.78 + pb * 0.22)];
+  }
+  return {
+    lo: typeof g.lo === 'number' ? g.lo : 0.02,
+    hi: typeof g.hi === 'number' ? g.hi : 0.36,
+    gamma: typeof g.gamma === 'number' ? g.gamma : 1.0,
+    sat: typeof g.sat === 'number' ? g.sat : 0.25,
+    shadow, highlight,
+  };
+}
+
+function gradePhoto(rgba: Uint8Array, dw: number, dh: number, o: GradeOpts): void {
+  for (let i = 0; i < dw * dh * 4; i += 4) {
+    const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+    let L = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    L = Math.pow(L, o.gamma);
+    const t = o.lo + (o.hi - o.lo) * L; // luminancia destino
+    const dr = o.shadow[0] + (o.highlight[0] - o.shadow[0]) * L;
+    const dg = o.shadow[1] + (o.highlight[1] - o.shadow[1]) * L;
+    const db = o.shadow[2] + (o.highlight[2] - o.shadow[2]) * L;
+    const dL = Math.max(0.001, (0.2126 * dr + 0.7152 * dg + 0.0722 * db) / 255);
+    const k = t / dL;
+    const ok = t / Math.max(0.001, (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255);
+    rgba[i]     = clampByte((dr * k) * (1 - o.sat) + (r * ok) * o.sat);
+    rgba[i + 1] = clampByte((dg * k) * (1 - o.sat) + (g * ok) * o.sat);
+    rgba[i + 2] = clampByte((db * k) * (1 - o.sat) + (b * ok) * o.sat);
+  }
+}
+function clampByte(v: number): number { return Math.max(0, Math.min(255, Math.round(v))); }
+
 function compositeSlideOverPhoto(slidePng: Buffer, photoRgba: Uint8Array, dw: number, dh: number): Buffer {
   const dec = UPNG.decode(slidePng);
   const fg = new Uint8Array(UPNG.toRGBA8(dec)[0]);
@@ -444,10 +499,11 @@ function injectVeilForPhoto(
   const rootTag = m[0];
   const newRootTag = rootTag.replace(/background:[^;"']+/, 'background:transparent');
   const insertAt = (m.index || 0) + rootTag.length;
-  if (veilMode === 'none') {
-    // Portada con la foto como estrella: la legibilidad la garantiza el propio
-    // tratamiento (tarjeta opaca, sombra dura). Solo root transparente.
-    return { html: newRootTag + resolvedHtml.slice(insertAt), status: 'no_veil' };
+  if (veilMode === 'none' || veilMode === 'photo_graded') {
+    // none: la legibilidad la garantiza el propio tratamiento (tarjeta opaca).
+    // photo_graded: la garantiza la normalizacion de la foto (paso 6b). En
+    // ambos casos, solo root transparente, sin div de velo.
+    return { html: newRootTag + resolvedHtml.slice(insertAt), status: veilMode === 'photo_graded' ? 'graded_pending' : 'no_veil' };
   }
   let veil: string;
   let status: string;
@@ -618,7 +674,7 @@ export default async function handler(req: any, res: any) {
     let backgroundStatus = 'none';
     let photoRgba: Uint8Array | null = null;
     const backgroundImage = (body?.background_image && typeof body.background_image === 'object' && body.background_image.url)
-      ? { url: String(body.background_image.url), veil: String(body.background_image.veil || 'auto') }
+      ? { url: String(body.background_image.url), veil: String(body.background_image.veil || 'auto'), grade: body.background_image.grade || null }
       : null;
     if (backgroundImage) {
       photoRgba = await fetchPhotoRgba(backgroundImage.url, width, height);
@@ -692,7 +748,13 @@ export default async function handler(req: any, res: any) {
     //     sin foto (con el velo sobre transparente aplanado a blanco por el
     //     encode) antes que romper el render.
     if (photoRgba) {
-      try { png = compositeSlideOverPhoto(png, photoRgba, width, height); }
+      try {
+        if (backgroundImage && backgroundImage.veil === 'photo_graded') {
+          gradePhoto(photoRgba, width, height, resolveGradeOpts(backgroundImage.grade, brandColors.color_primary || '#1E6E5A'));
+          backgroundStatus = 'graded';
+        }
+        png = compositeSlideOverPhoto(png, photoRgba, width, height);
+      }
       catch (e) { backgroundStatus = 'skip_composite_failed'; }
     }
 
