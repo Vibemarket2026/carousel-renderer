@@ -165,10 +165,27 @@ export function deriveTokens(brand: BrandColors, variant: RecipeVariant = 'light
   const textMutedBase = dark ? '#8A847C' : '#8A938C';
   const hairline = dark ? '#2C2722' : '#E2DDD2';
 
+  // GUARDIA DE LEGIBILIDAD DE accent-soft (2026-08-28). accent-soft es "fondo
+  // de tarjetas CON TEXTO" (paneles de two_column, tarjetas), así que la tinta
+  // de título tiene que leerse encima. Las comprobaciones de arriba solo miran
+  // separación con accent y bg, no legibilidad: un secundario de marca casi
+  // negro (caso real: Vibemarket #0b0d14) pasaba crudo y con variant light la
+  // tinta oscura desaparecía sobre él (panel derecho ilegible en modern_grid).
+  // Si no llega a 4.5:1 con la tinta final, se re-deriva del acento hacia el
+  // polo del fondo (tinte claro en light, sombra en dark), que es lo que
+  // "soft" significa. En dark, panel oscuro + tinta clara ya cumple y no se toca.
+  const textTitle = ensureContrast(textTitleBase, bg, 7);
+  if (contrast(accentSoft, textTitle) < 4.5) {
+    accentSoft = dark ? mix(accent, '#000000', 0.55) : mix(accent, '#FFFFFF', 0.78);
+    if (contrast(accentSoft, textTitle) < 4.5) {
+      accentSoft = mix(accentSoft, relLum(textTitle) < 0.45 ? '#FFFFFF' : '#111111', 0.5);
+    }
+  }
+
   return {
     '--bg': bg,
     '--surface': surface,
-    '--text-title': ensureContrast(textTitleBase, bg, 7),
+    '--text-title': textTitle,
     '--text-body': ensureContrast(textBodyBase, bg, 4.5),
     '--text-muted': ensureContrast(textMutedBase, bg, 3),
     '--accent': accent,                       // relleno (botones, formas) — sin tocar
