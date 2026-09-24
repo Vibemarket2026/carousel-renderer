@@ -2,17 +2,17 @@
 // render-html.ts: logo aplanado sobre el fondo real; foto decodificada y compuesta a
 // nivel de píxel para no meter data URIs enormes en Satori).
 // 2026-09-24: el logo se RECORTA a su contenido (fuera márgenes transparentes o del
-// color de fondo del propio fichero). Muchos logos traen mucho aire alrededor y a
-// 80-120 px de alto la marca se veía diminuta.
+// color de fondo del propio fichero) y se REDUCE a 240 px de alto como máximo antes de
+// incrustarlo: con logos de miles de píxeles el data URI era enorme y satori-html se
+// colgaba (>60 s, la slide fallaba).
 import UPNG from 'upng-js';
 import * as JPEG from 'jpeg-js';
 import { imageDims } from './v2.js';
 
+const LOGO_MAX_H = 240, LOGO_MAX_W = 1200;
 const hexRgb = (hex: string): [number, number, number] => { let h = (hex || '').replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); if (!/^[0-9a-fA-F]{6}$/.test(h)) return [255, 255, 255]; return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
 const logoCache: Map<string, { uri: string; w: number; h: number } | null> = new Map();
 
-// Recorta al rectángulo con contenido: píxeles con alfa > 16 que además se distinguen
-// del color de la esquina superior izquierda (fondo del propio logo si es opaco).
 function cropToContent(rgba: Uint8Array, w: number, h: number): { data: Uint8Array; w: number; h: number } {
   const cr = rgba[0], cg = rgba[1], cb = rgba[2], ca = rgba[3];
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -30,6 +30,23 @@ function cropToContent(rgba: Uint8Array, w: number, h: number): { data: Uint8Arr
   return { data: out, w: nw, h: nh };
 }
 
+// Reducción por promedio de caja (buena calidad para logos, sin dependencias).
+function downscale(src: Uint8Array, w: number, h: number): { data: Uint8Array; w: number; h: number } {
+  const s = Math.min(1, LOGO_MAX_H / h, LOGO_MAX_W / w);
+  if (s >= 1) return { data: src, w, h };
+  const nw = Math.max(1, Math.round(w * s)), nh = Math.max(1, Math.round(h * s)); const out = new Uint8Array(nw * nh * 4);
+  for (let y = 0; y < nh; y++) {
+    const sy0 = Math.floor(y / s), sy1 = Math.min(h, Math.floor((y + 1) / s));
+    for (let x = 0; x < nw; x++) {
+      const sx0 = Math.floor(x / s), sx1 = Math.min(w, Math.floor((x + 1) / s));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = sy0; yy < Math.max(sy1, sy0 + 1); yy++) for (let xx = sx0; xx < Math.max(sx1, sx0 + 1); xx++) { const i = (yy * w + xx) * 4; const al = src[i + 3]; r += src[i] * al; g += src[i + 1] * al; b += src[i + 2] * al; a += al; n++; }
+      const o = (y * nw + x) * 4; out[o] = a ? r / a : 0; out[o + 1] = a ? g / a : 0; out[o + 2] = a ? b / a : 0; out[o + 3] = a / n;
+    }
+  }
+  return { data: out, w: nw, h: nh };
+}
+
 export async function loadLogoV2(url: string, bgHex: string): Promise<{ uri: string; w: number; h: number } | null> {
   const key = url + '|' + bgHex;
   if (logoCache.has(key)) return logoCache.get(key) || null;
@@ -41,12 +58,13 @@ export async function loadLogoV2(url: string, bgHex: string): Promise<{ uri: str
       const isPng = buf[0] === 0x89 && buf[1] === 0x50;
       const isJpg = buf[0] === 0xff && buf[1] === 0xd8;
       const isSvg = !isPng && !isJpg && /<svg/i.test(buf.subarray(0, 512).toString('utf8'));
-      if (isSvg) { const uri = 'data:image/svg+xml;base64,' + buf.toString('base64'); const d = imageDims(uri); if (d) res = { uri, ...d }; }
+      if (isSvg) { if (buf.length < 400 * 1024) { const uri = 'data:image/svg+xml;base64,' + buf.toString('base64'); const d = imageDims(uri); if (d) res = { uri, ...d }; } }
       else if (isPng || isJpg) {
         let rgba: Uint8Array, w: number, h: number;
         if (isPng) { const dec = UPNG.decode(buf); rgba = new Uint8Array(UPNG.toRGBA8(dec)[0]); w = dec.width; h = dec.height; }
-        else { const dec = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true } as any); rgba = dec.data as Uint8Array; w = dec.width; h = dec.height; }
-        const c = cropToContent(rgba, w, h); const [br, bg, bb] = hexRgb(bgHex); const d = c.data;
+        else { const dec = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 } as any); rgba = dec.data as Uint8Array; w = dec.width; h = dec.height; }
+        const c0 = cropToContent(rgba, w, h); const c = downscale(c0.data, c0.w, c0.h);
+        const [br, bg, bb] = hexRgb(bgHex); const d = c.data;
         for (let i = 0; i < d.length; i += 4) { const a = d[i + 3] / 255; d[i] = Math.round(d[i] * a + br * (1 - a)); d[i + 1] = Math.round(d[i + 1] * a + bg * (1 - a)); d[i + 2] = Math.round(d[i + 2] * a + bb * (1 - a)); d[i + 3] = 255; }
         const uri = 'data:image/png;base64,' + Buffer.from(UPNG.encode([d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength)], c.w, c.h, 0)).toString('base64');
         res = { uri, w: c.w, h: c.h };
