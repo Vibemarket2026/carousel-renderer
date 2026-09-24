@@ -1,14 +1,15 @@
 {
   "name": "vibemarket-render-engine",
   "type": "module",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Vibemarket Carousel & GMB Post Rendering Service - Satori + Resvg",
   "dependencies": {
     "satori": "^0.10.0",
     "@resvg/resvg-js": "^2.6.0",
     "satori-html": "^0.3.2",
     "upng-js": "^2.1.0",
-    "jpeg-js": "^0.4.4"
+    "jpeg-js": "^0.4.4",
+    "opentype.js": "^1.3.4"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
