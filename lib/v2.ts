@@ -213,11 +213,37 @@ export async function buildV2(inp: V2Input): Promise<{ html: string; tokens: Rec
     body = body.replace(/^(<div style=")([^"]*)(">)/, (x, a, s, c) => a + s.replace(/background:[^;"]*(\([^)]*\)[^;"]*)?/, 'background:transparent') + c + fade);
   }
 
-  // dos columnas con textos breves: el cuerpo crece (hasta x1.25) para no quedarse pequeño
-  for (const f of ['left_body', 'right_body']) {
-    const words = String(fields[f] || '').trim().split(/\s+/).filter(Boolean).length;
-    if (words && words <= 14) { const k = words <= 8 ? 1.25 : 1.12; body = body.replace(new RegExp('(<div style="[^"]*font-size:)(\\d+)(px[^"]*">\\{\\{' + f + '\\}\\})'), (x, a, n, b) => a + Math.round(parseInt(n, 10) * k) + b); }
-  }
+  // textos secundarios breves: crecen según lo cortos que sean para no quedarse diminutos
+  // junto a una cifra o una cita grandes (dos columnas, dato, cita)
+  const wordsOf = (f: string) => String(fields[f] || '').trim().split(/\s+/).filter(Boolean).length;
+  const scaleField = (f: string, k: number, cap: number) => {
+    if (k <= 1) return;
+    body = body.replace(new RegExp('(<div style="[^"]*font-size:)(\\d+)(px[^"]*">\\{\\{' + f + '\\}\\})'), (x, a, n, b) => {
+      const px = parseInt(n, 10); return a + Math.max(px, Math.min(cap, Math.round(px * k))) + b;
+    });
+  };
+  for (const f of ['left_body', 'right_body']) { const w = wordsOf(f); if (w) scaleField(f, w <= 8 ? 1.25 : w <= 14 ? 1.12 : 1, 64); }
+  // dato: etiqueta y contexto crecen y pasan por el ajuste medido (líneas equilibradas, sin huérfanas)
+  const centered = /text-align:\s*center/.test(body);
+  const numW = (() => { const m = body.match(/data-fit="[\d.]+,[\d.]+,[\d.]+,(\d+)"[^>]*>\{\{stat_number\}\}/); return m ? parseInt(m[1], 10) : 840; })();
+  const fitField = (f: string, k: number, cap: number) => {
+    body = body.replace(new RegExp('<div style="([^"]*font-size:(\\d+)px[^"]*)">\\{\\{' + f + '\\}\\}'), (x, st, n, off) => {
+      const px = parseInt(n, 10); const mx = Math.max(px, Math.min(cap, Math.round(px * k)));
+      // ancho disponible: el suyo, o el del contenedor inmediato, o el de la cifra
+      const own = st.match(/(?:^|;)\s*(?:max-width|width):\s*(\d+)px/);
+      const parent = body.slice(0, off).match(/<div style="[^"]*(?:^|;)\s*width:\s*(\d+)px[^"]*">$/);
+      const W = own ? parseInt(own[1], 10) : parent ? parseInt(parent[1], 10) : numW;
+      const st2 = st.replace(/font-size:\s*\d+px/, 'font-size:' + mx + 'px') + (centered && !/justify-content/.test(st) ? ';justify-content:center' : '');
+      return `<div data-fit="${mx},${px},900,${W}" data-hl="" style="${st2}">{{${f}}}`;
+    });
+  };
+  { const w = wordsOf('stat_label'); if (w) fitField('stat_label', w <= 3 ? 1.75 : w <= 6 ? 1.4 : 1.15, 96); }
+  { const w = wordsOf('context'); if (w) fitField('context', w <= 8 ? 1.5 : w <= 14 ? 1.3 : 1.2, 62); }
+  { const w = wordsOf('attribution'); if (w) scaleField('attribution', w <= 4 ? 1.35 : 1.2, 44); }
+  // citas breves: más cuerpo máximo para la cita (el ajuste medido sigue impidiendo desbordes)
+  { const w = wordsOf('quote'); const k = w && w <= 8 ? 1.45 : w && w <= 14 ? 1.2 : 1;
+    if (k > 1) body = body.replace(/(<div data-fit=")(\d+),(\d+),(\d+)(,?[^"]*)("[^>]*>\{\{quote\}\})/, (x, a, mx, mn, h, rest, b) =>
+      a + Math.round(parseInt(mx, 10) * k) + ',' + mn + ',' + Math.min(900, Math.round(parseInt(h, 10) * k)) + rest + b); }
 
   // campos simples (los de data-fit se quedan para el paso 3)
   body = body.replace(/(<div data-fit="[^"]*" data-hl="[^"]*" style="[^"]*">)\{\{(\w+)\}\}/g, (x, open, f) => open + '[[FIT:' + f + ']]');
