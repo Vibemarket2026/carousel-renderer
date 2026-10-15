@@ -17,6 +17,18 @@ import { loadLogoV2, fetchPhotoRgbaV2, compositeOverPhotoV2 } from '../lib/v2-me
 
 const CURTAIN_ALPHA = 0.8;
 
+// Zona de texto de una variante de foto. Si n8n no manda background_image.text_zone,
+// se deduce del propio esqueleto: en todas las variantes *_photo_top la caja de texto
+// que sigue a la capa {{photo_url}} empieza en top:0px; en las *_photo_bottom empieza
+// más abajo (top:590/630px). Antes se asumía 'bottom' y en las variantes de arriba el
+// fundido crema caía abajo, donde no hay texto (2026-10-15).
+function resolveTextZone(html: string, explicit: unknown): 'top' | 'bottom' {
+  if (explicit === 'top' || explicit === 'bottom') return explicit;
+  const m = html.match(/url\(\{\{photo_url\}\}\)[^>]*><\/div><div style="[^"]*?(?:^|;)\s*top:\s*(\d+)px/);
+  if (m) return parseInt(m[1], 10) === 0 ? 'top' : 'bottom';
+  return 'bottom';
+}
+
 function normalizeFlex(node: any): any {
   if (!node || typeof node !== 'object') return node;
   const kids = node.props?.children; const arr = Array.isArray(kids) ? kids : (kids != null ? [kids] : []);
@@ -49,7 +61,7 @@ export default async function handler(req: any, res: any) {
     const v2 = await buildV2({
       html, fields: body?.fields || {}, brand, fonts, fontHeading, fontBody,
       slideNumber: body?.meta?.slide_number, enumIndex: body?.meta?.enum_index ?? null,
-      photo: photoRgba ? { zone: bgi?.text_zone || null } : null,
+      photo: photoRgba ? { zone: resolveTextZone(html, bgi?.text_zone) } : null,
       loadLogo: loadLogoV2,
     });
     let outHtml = v2.html;
