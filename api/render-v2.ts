@@ -17,15 +17,18 @@ import { loadLogoV2, fetchPhotoRgbaV2, compositeOverPhotoV2 } from '../lib/v2-me
 
 const CURTAIN_ALPHA = 0.8;
 
-// Zona de texto de una variante de foto. Si n8n no manda background_image.text_zone,
-// se deduce del propio esqueleto: en todas las variantes *_photo_top la caja de texto
-// que sigue a la capa {{photo_url}} empieza en top:0px; en las *_photo_bottom empieza
-// más abajo (top:590/630px). Antes se asumía 'bottom' y en las variantes de arriba el
-// fundido crema caía abajo, donde no hay texto (2026-10-15).
+// Zona de texto de una variante de foto. Manda SIEMPRE el esqueleto: en todas las variantes
+// *_photo_top la caja de texto que sigue a la capa {{photo_url}} empieza en top:0px; en las
+// *_photo_bottom empieza más abajo (top:590/630px). El text_zone que manda n8n solo se usa si
+// el esqueleto no permite deducirlo.
+// 2026-10-15: antes se asumía 'bottom' y en las variantes de arriba el fundido caía abajo.
+// 2026-10-29: si el estilo no tiene variante para la zona pedida (suizo solo tiene abajo,
+// editorial solo arriba), n8n usaba el esqueleto disponible pero mandaba la zona pedida, y el
+// fundido quedaba en el lado contrario al texto. Ahora el esqueleto tiene prioridad.
 function resolveTextZone(html: string, explicit: unknown): 'top' | 'bottom' {
-  if (explicit === 'top' || explicit === 'bottom') return explicit;
   const m = html.match(/url\(\{\{photo_url\}\}\)[^>]*><\/div><div style="[^"]*?(?:^|;)\s*top:\s*(\d+)px/);
-  if (m) return parseInt(m[1], 10) === 0 ? 'top' : 'bottom';
+  if (m) return parseInt(m[1], 10) < 300 ? 'top' : 'bottom';
+  if (explicit === 'top' || explicit === 'bottom') return explicit;
   return 'bottom';
 }
 
