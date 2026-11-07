@@ -75,19 +75,71 @@ export async function loadLogoV2(url: string, bgHex: string): Promise<{ uri: str
   return res;
 }
 
-export async function fetchPhotoRgbaV2(url: string, dw: number, dh: number): Promise<Uint8Array | null> {
+// ── Foto de fondo ────────────────────────────────────────────────────
+// 2026-11-07: además de PNG y JPEG, se decodifican WebP, GIF, AVIF y TIFF con sharp
+// (import dinámico: si sharp no carga, PNG/JPEG siguen funcionando como antes). Antes una
+// foto .webp de la biblioteca devolvía null y la slide fallaba ("Image source is not
+// provided"): Mevak tenía 26 de 42 fotos en .webp.
+export interface DecodedPhoto { rgba: Uint8Array; w: number; h: number }
+
+let sharpMod: any = undefined;
+async function loadSharp(): Promise<any> {
+  if (sharpMod !== undefined) return sharpMod;
+  try { const m: any = await import('sharp'); sharpMod = m.default || m; } catch (e) { console.error('[v2-media] sharp no disponible:', e); sharpMod = null; }
+  return sharpMod;
+}
+
+export async function decodePhotoV2(buf: Buffer): Promise<DecodedPhoto | null> {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) { const d = UPNG.decode(buf); return { rgba: new Uint8Array(UPNG.toRGBA8(d)[0]), w: d.width, h: d.height }; }
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) { const d = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 } as any); return { rgba: d.data as Uint8Array, w: d.width, h: d.height }; }
+  const sharp = await loadSharp();
+  if (!sharp) return null;
+  // Se limita a 2400 px de lado para no disparar memoria; de sobra para 1080x1350.
+  const { data, info } = await sharp(buf, { animated: false, limitInputPixels: 80_000_000 }).rotate()
+    .resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true })
+    .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { rgba: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height };
+}
+
+export async function fetchPhotoV2(url: string): Promise<DecodedPhoto | null> {
   try {
     const r = await fetch(url); if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 8 * 1024 * 1024 || buf.length < 12) return null;
-    let rgba: Uint8Array, sw: number, sh: number;
-    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) { const d = UPNG.decode(buf); rgba = new Uint8Array(UPNG.toRGBA8(d)[0]); sw = d.width; sh = d.height; }
-    else if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) { const d = JPEG.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 } as any); rgba = d.data as Uint8Array; sw = d.width; sh = d.height; }
-    else return null;
-    const scale = Math.max(dw / sw, dh / sh), ox = (sw - dw / scale) / 2, oy = (sh - dh / scale) / 2;
-    const out = new Uint8Array(dw * dh * 4);
-    for (let y = 0; y < dh; y++) { const sy = Math.min(sh - 1, Math.max(0, Math.floor(oy + (y + 0.5) / scale))); for (let x = 0; x < dw; x++) { const sx = Math.min(sw - 1, Math.max(0, Math.floor(ox + (x + 0.5) / scale))); const si = (sy * sw + sx) * 4, di = (y * dw + x) * 4; out[di] = rgba[si]; out[di + 1] = rgba[si + 1]; out[di + 2] = rgba[si + 2]; out[di + 3] = 255; } }
-    return out;
-  } catch { return null; }
+    const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 15 * 1024 * 1024) return null;
+    return await decodePhotoV2(buf);
+  } catch (e) { console.error('[v2-media] foto no decodificada:', url, e); return null; }
+}
+
+const hexToRgb = (hex: string): [number, number, number] => hexRgb(hex);
+
+// Encaja la foto en el lienzo.
+// - Sin zona de texto (cortina) o foto vertical/cuadrada: "cover" centrado, como antes.
+// - Foto horizontal en una variante de foto: antes se recortaba al centro a 4:5 y se perdía
+//   ~40 % del ancho. Ahora la foto ocupa solo la parte del lienzo que queda fuera del bloque
+//   de texto (68 % del alto, pegada al lado contrario del texto) y el resto se rellena con el
+//   color de fondo del estilo, que queda bajo el fundido opaco: no se nota la costura y se ve
+//   casi toda la foto.
+export function layoutPhotoV2(src: DecodedPhoto, dw: number, dh: number, opts: { zone: 'top' | 'bottom' | null; bgHex: string }): Uint8Array {
+  const out = new Uint8Array(dw * dh * 4);
+  const [br, bg, bb] = hexToRgb(opts.bgHex);
+  for (let i = 0; i < out.length; i += 4) { out[i] = br; out[i + 1] = bg; out[i + 2] = bb; out[i + 3] = 255; }
+  const { rgba, w: sw, h: sh } = src;
+  const landscape = sw / sh > (dw / dh) * 1.15;
+  let rx = 0, ry = 0, rw = dw, rh = dh; // región del lienzo que ocupa la foto
+  if (opts.zone && landscape) {
+    rh = Math.round(dh * 0.68);
+    ry = opts.zone === 'bottom' ? 0 : dh - rh;
+  }
+  const scale = Math.max(rw / sw, rh / sh), ox = (sw - rw / scale) / 2, oy = (sh - rh / scale) / 2;
+  for (let y = 0; y < rh; y++) {
+    const sy = Math.min(sh - 1, Math.max(0, Math.floor(oy + (y + 0.5) / scale)));
+    for (let x = 0; x < rw; x++) {
+      const sx = Math.min(sw - 1, Math.max(0, Math.floor(ox + (x + 0.5) / scale)));
+      const si = (sy * sw + sx) * 4, di = ((y + ry) * dw + (x + rx)) * 4; const a = rgba[si + 3] / 255;
+      out[di] = Math.round(rgba[si] * a + br * (1 - a)); out[di + 1] = Math.round(rgba[si + 1] * a + bg * (1 - a)); out[di + 2] = Math.round(rgba[si + 2] * a + bb * (1 - a)); out[di + 3] = 255;
+    }
+  }
+  return out;
 }
 
 export function compositeOverPhotoV2(slidePng: Buffer, photo: Uint8Array, dw: number, dh: number): Buffer {

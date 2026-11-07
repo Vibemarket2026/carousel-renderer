@@ -13,7 +13,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { html as toVNode } from 'satori-html';
 import { buildV2, isV2 } from '../lib/v2.js';
 import { loadFontsV2 } from '../lib/v2-fonts.js';
-import { loadLogoV2, fetchPhotoRgbaV2, compositeOverPhotoV2 } from '../lib/v2-media.js';
+import { loadLogoV2, fetchPhotoV2, layoutPhotoV2, compositeOverPhotoV2, type DecodedPhoto } from '../lib/v2-media.js';
 
 const CURTAIN_ALPHA = 0.8;
 
@@ -56,17 +56,22 @@ export default async function handler(req: any, res: any) {
     const fontBody: string = brand.font_body || fontHeading;
     const fonts = await loadFontsV2([fontHeading, fontBody]);
 
-    let photoRgba: Uint8Array | null = null; let backgroundStatus = 'none';
+    let photo: DecodedPhoto | null = null; let photoRgba: Uint8Array | null = null; let backgroundStatus = 'none';
     const bgi = body?.background_image && body.background_image.url ? body.background_image : null;
-    if (bgi) { photoRgba = await fetchPhotoRgbaV2(String(bgi.url), width, height); backgroundStatus = photoRgba ? 'photo' : 'skip_fetch_failed'; }
+    if (bgi) { photo = await fetchPhotoV2(String(bgi.url)); backgroundStatus = photo ? 'photo' : 'skip_fetch_failed'; }
     const isPhotoVariant = html.includes('{{photo_url}}');
+    const zone = resolveTextZone(html, bgi?.text_zone);
+    // 2026-11-07: si la foto no se pudo cargar, se quita la capa {{photo_url}} y la slide sale
+    // plana (antes satori fallaba con "Image source is not provided" y se perdía la slide).
+    const srcHtml = (!photo && isPhotoVariant) ? html.replace(/<div style="[^"]*url\(\{\{photo_url\}\}\)[^"]*"><\/div>/, '') : html;
 
     const v2 = await buildV2({
-      html, fields: body?.fields || {}, brand, fonts, fontHeading, fontBody,
+      html: srcHtml, fields: body?.fields || {}, brand, fonts, fontHeading, fontBody,
       slideNumber: body?.meta?.slide_number, enumIndex: body?.meta?.enum_index ?? null,
-      photo: photoRgba ? { zone: resolveTextZone(html, bgi?.text_zone) } : null,
+      photo: photo ? { zone } : null,
       loadLogo: loadLogoV2,
     });
+    if (photo) photoRgba = layoutPhotoV2(photo, width, height, { zone: isPhotoVariant ? zone : null, bgHex: v2.bgHex });
     let outHtml = v2.html;
     if (photoRgba && !isPhotoVariant) {
       // Cortina uniforme: sustituye el fundido por zona por un velo del color de fondo.
