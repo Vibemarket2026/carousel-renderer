@@ -16,6 +16,8 @@
 //  4. Satori: em -> px, fuera propiedades no soportadas.
 //  5. Foto: quita la capa {{photo_url}} (la foto se compone luego a nivel de píxel) y funde
 //     la zona de texto con el color de fondo del estilo.
+// Nota: los campos se escapan (esc) al montar el HTML; api/render-v2.ts decodifica las
+// entidades de los textos tras el parseo (satori-html no lo hace).
 
 import opentype from 'opentype.js';
 export interface SatoriFont { name: string; data: Buffer; weight: number; style: 'normal' | 'italic' }
@@ -72,6 +74,21 @@ function pickFont(fonts: SatoriFont[], family: string, weight: number, italic: b
 // ── utilidades ───────────────────────────────────────────────────────
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const styleGet = (st: string, k: string) => { const m = st.match(new RegExp('(?:^|;)\\s*' + k + '\\s*:\\s*([^;]*)')); return m ? m[1].trim() : ''; };
+
+// ── tamaño del logo ──────────────────────────────────────────────────
+// 2026-11-11: antes alto fijo de 80px (máx. 420 de ancho): un logo cuadrado quedaba en
+// 80x80 sobre 1080 y casi no se veía. Ahora se dimensiona por SUPERFICIE para que todos
+// los logos pesen parecido sea cual sea su proporción: cuadrado ~167x167, 2:1 ~237x118,
+// 4:1 ~335x84; los muy apaisados quedan casi como antes (alto mínimo 80, ancho máx. 460).
+const LOGO_AREA = 28000, LOGO_MIN_H = 80, LOGO_MAX_H = 170, LOGO_MAX_W = 460;
+export function logoBox(srcW: number, srcH: number): { w: number; h: number } {
+  const ratio = srcW / srcH;
+  let h = Math.round(Math.sqrt(LOGO_AREA / ratio));
+  h = Math.max(LOGO_MIN_H, Math.min(LOGO_MAX_H, h));
+  let w = Math.round(h * ratio);
+  if (w > LOGO_MAX_W) { w = LOGO_MAX_W; h = Math.round(w / ratio); }
+  return { w, h };
+}
 
 interface Tok { w: string; em: boolean }
 function tokenize(text: string): Tok[] {
@@ -196,8 +213,10 @@ export async function buildV2(inp: V2Input): Promise<{ html: string; tokens: Rec
     if (url) {
       const lg = await inp.loadLogo(url, bgHex).catch(() => null);
       if (lg && lg.w > 0 && lg.h > 0) {
-        let h = 80, w = Math.round(h * lg.w / lg.h); if (w > 420) { w = 420; h = Math.round(w * lg.h / lg.w); }
-        tag = `<img src="${lg.uri}" width="${w}" height="${h}" style="display:flex;width:${w}px;height:${h}px;" />`; logoStatus = 'inserted' + (darkBg ? '_dark' : '');
+        const { w, h } = logoBox(lg.w, lg.h);
+        tag = `<img src="${lg.uri}" width="${w}" height="${h}" style="display:flex;width:${w}px;height:${h}px;" />`; logoStatus = 'inserted' + (darkBg ? '_dark' : '') + `_${w}x${h}`;
+        // La caja del logo en los esqueletos _cta mide 120px de alto: si el logo es más alto, crece con él.
+        if (h > 120) body = body.replace(/height:120px(;align-items:center[^"]*">)\{\{logo\}\}/g, `height:${h}px$1{{logo}}`);
       } else logoStatus = 'fetch_failed_text';
     } else logoStatus = darkBg ? 'no_dark_logo_text' : 'no_logo_text';
     if (!tag) tag = `<span style="font-family:var(--font-body);font-size:30px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-title)">${esc(fields.brand_name)}</span>`;
