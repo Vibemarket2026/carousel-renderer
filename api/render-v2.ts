@@ -32,8 +32,27 @@ function resolveTextZone(html: string, explicit: unknown): 'top' | 'bottom' {
   return 'bottom';
 }
 
+// 2026-11-11: lib/v2.ts escapa los campos al montar el HTML (& -> &amp;, < -> &lt;...)
+// para no romper el parseo, pero satori-html deja las entidades tal cual en los nodos de
+// texto y Satori las pintaba literales ("S&amp;G Nail Madrid"). Se decodifican aquí, en
+// los textos ya parseados (no en atributos), así que no hay riesgo de reinterpretar HTML.
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+function decodeEntities(s: string): string {
+  if (!s || s.indexOf('&') === -1) return s;
+  return s.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (m: string, e: string) => {
+    if (e[0] === '#') {
+      const cp = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
+    }
+    const v = NAMED_ENTITIES[e.toLowerCase()];
+    return v !== undefined ? v : m;
+  });
+}
+
 function normalizeFlex(node: any): any {
   if (!node || typeof node !== 'object') return node;
+  if (node.props && typeof node.props.children === 'string') node.props.children = decodeEntities(node.props.children);
+  else if (node.props && Array.isArray(node.props.children)) node.props.children = node.props.children.map((k: any) => (typeof k === 'string' ? decodeEntities(k) : k));
   const kids = node.props?.children; const arr = Array.isArray(kids) ? kids : (kids != null ? [kids] : []);
   if (node.type === 'div') {
     node.props = node.props || {}; node.props.style = node.props.style || {};
